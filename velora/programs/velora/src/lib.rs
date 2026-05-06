@@ -1,4 +1,4 @@
-
+use anchor_lang::system_program;
 
 use anchor_lang::prelude::*;
 
@@ -155,12 +155,6 @@ pub enum VeloraError {
  
     #[msg("Operator already registered")]
     AlreadyRegistered,
- 
-    #[msg("Insufficient bond deposited")]
-    InsufficientBond,
- 
-    #[msg("Slash condition not met")]
-    SlashConditionNotMet,
 
     #[msg("No bond deposited — nothing to return")]
     NoBondDeposited,
@@ -176,4 +170,7 @@ pub enum VeloraError {
  
     #[msg("Slash condition not met")]
     SlashConditionNotMet,
+
+    #[msg("Deposit amount must be greater than zero")]
+    ZeroDeposit,
 }

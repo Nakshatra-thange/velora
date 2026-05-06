@@ -52,6 +52,19 @@ pub fn deposit_bond(ctx : Context<DepositBond>, amount_lamports : u64)-> Result<
 
 }
 
+pub fn deregister_operator(ctx: Context<DeregisterOperator>) -> Result<()>{
+    let vault = &ctx.accounts.escrow_vault;
+    require!(vault.deposited_lamports > 0, VeloraError::NoBondDeposited);
+    let return_amount = vault.deposited_lamports;
+    **ctx.accounts.escrow_vault.to_account_info().try_borrow_mut_lamports()? -= return_amount;
+    **ctx.accounts.operator.to_account_info().try_borrow_mut_lamports()?     += return_amount;
+
+    ctx.accounts.escrow_vault.deposited_lamports = 0;
+    ctx.accounts.operator_registry.is_active = false;
+
+    Ok(())
+}
+
 #[derive(Accounts)]
 pub struct DepositBond<'info> {
     #[account(mut)]

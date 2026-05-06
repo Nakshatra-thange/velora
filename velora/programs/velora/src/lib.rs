@@ -65,19 +65,6 @@ pub fn deregister_operator(ctx: Context<DeregisterOperator>) -> Result<()>{
     Ok(())
 }
 
-#[derive(Accounts)]
-pub struct DepositBond<'info> {
-    #[account(mut)]
-    pub operator: Signer<'info>,
-    #[account(
-        mut,
-        seeds  = [b"escrow", operator.key().as_ref()],
-        bump   = escrow_vault.bump,
-        has_one = operator @ VeloraError::UnauthorizedOperator,
-    )]
-    pub escrow_vault: Account<'info, EscrowVault>,
-    pub system_program: Program<'info, System>,
-}
 
 
 
@@ -106,6 +93,44 @@ pub struct RegisterOperator<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct DepositBond<'info> {
+    #[account(mut)]
+    pub operator: Signer<'info>,
+    #[account(
+        mut,
+        seeds  = [b"escrow", operator.key().as_ref()],
+        bump   = escrow_vault.bump,
+        has_one = operator @ VeloraError::UnauthorizedOperator,
+    )]
+    pub escrow_vault: Account<'info, EscrowVault>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct DeregisterOperator<'info> {
+    #[account(mut)]
+    pub operator: Signer<'info>,
+ 
+    #[account(
+        mut,
+        seeds  = [b"operator", operator.key().as_ref()],
+        bump   = operator_registry.bump,
+        has_one = operator @ VeloraError::UnauthorizedOperator,
+    )]
+    pub operator_registry: Account<'info, OperatorRegistry>,
+ 
+    #[account(
+        mut,
+        seeds  = [b"escrow", operator.key().as_ref()],
+        bump   = escrow_vault.bump,
+        has_one = operator @ VeloraError::UnauthorizedOperator,
+    )]
+    pub escrow_vault: Account<'info, EscrowVault>,
+
+}
+ 
+
 #[account]
 pub struct OperatorRegistry {
     pub operator:      Pubkey, 
@@ -131,6 +156,21 @@ pub enum VeloraError {
     #[msg("Operator already registered")]
     AlreadyRegistered,
  
+    #[msg("Insufficient bond deposited")]
+    InsufficientBond,
+ 
+    #[msg("Slash condition not met")]
+    SlashConditionNotMet,
+
+    #[msg("No bond deposited — nothing to return")]
+    NoBondDeposited,
+ 
+    #[msg("Signer is not the operator of this account")]
+    UnauthorizedOperator,
+ 
+    #[msg("Math overflow")]
+    MathOverflow,
+
     #[msg("Insufficient bond deposited")]
     InsufficientBond,
  

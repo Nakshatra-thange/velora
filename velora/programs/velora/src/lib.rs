@@ -16,7 +16,7 @@ pub mod velora {
     use super::*;
 
     pub fn register_operator(ctx: Context<RegisterOperator>, fee_bps:u16) -> Result<()> {
-        require!(fee_bps < 10_000 , FacilitatorError::FeeTooHigh);
+        require!(fee_bps < 10_000 , VeloraError::FeeTooHigh);
         let registry = &mut ctx.accounts.operator_registry;
         registry.operator   = ctx.accounts.operator.key();
         registry.fee_bps    = fee_bps;
@@ -36,17 +36,32 @@ pub mod velora {
 
 #[account]
 pub struct OperatorRegistry {
-    pub operator:      Pubkey, // 32
-    pub fee_bps:       u16,    // 2  — basis points, e.g. 50 = 0.5%
-    pub is_active:     bool,   // 1
-    pub registered_at: i64,    // 8  — unix timestamp
-    pub bump:          u8,     // 1  — PDA canonical bump
+    pub operator:      Pubkey, 
+    pub fee_bps:       u16,    
+    pub is_active:     bool,  
+    pub registered_at: i64,    
+    pub bump:          u8,     
 }
  
 #[account]
 pub struct EscrowVault {
-    pub operator:           Pubkey, // 32
-    pub deposited_lamports: u64,    // 8
-    pub locked_until:       i64,    // 8  — used in week 2 for slash timelock
-    pub bump:               u8,     // 1
+    pub operator:           Pubkey, 
+    pub deposited_lamports: u64,    
+    pub locked_until:       i64,    
+    pub bump:               u8,     
+}
+
+#[error_code]
+pub enum VeloraError {
+    #[msg("Fee basis points must be less than 10000 (100%)")]
+    FeeTooHigh,
+ 
+    #[msg("Operator already registered")]
+    AlreadyRegistered,
+ 
+    #[msg("Insufficient bond deposited")]
+    InsufficientBond,
+ 
+    #[msg("Slash condition not met")]
+    SlashConditionNotMet,
 }

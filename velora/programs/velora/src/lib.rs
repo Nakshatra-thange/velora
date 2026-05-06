@@ -1,13 +1,6 @@
-// pub mod constants;
-// pub mod error;
-// pub mod instructions;
-// pub mod state;
+
 
 use anchor_lang::prelude::*;
-
-// pub use constants::*;
-// pub use instructions::*;
-// pub use state::*;
 
 declare_id!("EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV");
 
@@ -33,6 +26,46 @@ pub mod velora {
         Ok(())
     }
 }
+
+// Move SOL from operator wallet → into escrow vault --> Then update: deposited_lamports
+
+pub fn deposit_bond(ctx : Context<DepositBond>, amount_lamports : u64)-> Result<()>{
+    require!(amount_lamports > 0, VeloraError::ZeroDeposit);
+    let cpi_ctx = CpiContext::new(
+        ctx.accounts.system_program.to_account_info(),
+        system_program::Transfer {
+            from : ctx.accounts.operator.to_account_info(),
+            to   : ctx.accounts.escrow_vault.to_account_info(),
+        }
+    );
+
+    system_program::transfer(cpi_ctx, amount_lamports);
+
+    let vault = &mut ctx.accounts.escrow_vault;
+    vault.deposited_lamports = vault
+            .deposited_lamports
+            .checked_add(amount_lamports)
+            .ok_or(VeloraError::MathOverflow)?;
+
+    Ok(())
+
+
+}
+
+#[derive(Accounts)]
+pub struct DepositBond<'info> {
+    #[account(mut)]
+    pub operator: Signer<'info>,
+    #[account(
+        mut,
+        seeds  = [b"escrow", operator.key().as_ref()],
+        bump   = escrow_vault.bump,
+        has_one = operator @ VeloraError::UnauthorizedOperator,
+    )]
+    pub escrow_vault: Account<'info, EscrowVault>,
+    pub system_program: Program<'info, System>,
+}
+
 
 
 #[derive(Accounts)]

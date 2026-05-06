@@ -34,6 +34,32 @@ pub mod velora {
     }
 }
 
+
+#[derive(Accounts)]
+pub struct RegisterOperator<'info> {
+    #[account(mut)]
+    pub operator: Signer<'info>,
+    #[account(
+        init,
+        payer  = operator,
+        space  = 8 + 32 + 2 + 1 + 8 + 1,
+        seeds  = [b"operator", operator.key().as_ref()],
+        bump
+    )]
+    pub operator_registry: Account<'info, OperatorRegistry>,
+
+    #[account(
+        init,
+        payer  = operator,
+        space  = 8 + 32 + 8 + 8 + 1,
+        seeds  = [b"escrow", operator.key().as_ref()],
+        bump
+    )]
+    pub escrow_vault: Account<'info, EscrowVault>,
+ 
+    pub system_program: Program<'info, System>,
+}
+
 #[account]
 pub struct OperatorRegistry {
     pub operator:      Pubkey, 

@@ -3,7 +3,13 @@ use anchor_lang::system_program;
 use anchor_lang::prelude::*;
 
 declare_id!("EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV");
-
+pub const SCALE: u64 = 1_000_000;
+pub const EMA_ALPHA: u64 = 950_000; //history
+pub const EMA_BETA:  u64 =  50_000; //new 
+pub const SLASH_THRESHOLD: u64 = 700_000; //threshold
+pub const SLASH_BPS: u64 = 2_000; //basis pt
+pub const MIN_BOND_LAMPORTS: u64 = 1_000_000_000; //min bond lamports
+pub const MAX_ACCEPTABLE_LATENCY_MS: u32 = 2_000; 
 #[program]
 pub mod velora {
     use super::*;
@@ -60,6 +66,14 @@ pub mod velora {
 
         Ok(())
     }
+    // ── Week 2 / Day 2 placeholder ─────────────
+    // initialize_scorecard goes here tomorrow
+ 
+    // ── Week 2 / Day 3 placeholder ─────────────
+    // submit_proof goes here
+ 
+    // ── Week 2 / Day 4 placeholder ─────────────
+    // slash_operator goes here
 }
 
 

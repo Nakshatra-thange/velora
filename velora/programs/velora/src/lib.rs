@@ -25,45 +25,43 @@ pub mod velora {
 
         Ok(())
     }
+
+    // Move SOL from operator wallet into escrow vault, then track the deposited amount.
+    pub fn deposit_bond(ctx : Context<DepositBond>, amount_lamports : u64)-> Result<()>{
+        require!(amount_lamports > 0, VeloraError::ZeroDeposit);
+        let cpi_ctx = CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            system_program::Transfer {
+                from : ctx.accounts.operator.to_account_info(),
+                to   : ctx.accounts.escrow_vault.to_account_info(),
+            }
+        );
+
+        system_program::transfer(cpi_ctx, amount_lamports)?;
+
+        let vault = &mut ctx.accounts.escrow_vault;
+        vault.deposited_lamports = vault
+                .deposited_lamports
+                .checked_add(amount_lamports)
+                .ok_or(VeloraError::MathOverflow)?;
+
+        Ok(())
+    }
+
+    pub fn deregister_operator(ctx: Context<DeregisterOperator>) -> Result<()>{
+        let return_amount = ctx.accounts.escrow_vault.deposited_lamports;
+        require!(return_amount > 0, VeloraError::NoBondDeposited);
+
+        **ctx.accounts.escrow_vault.to_account_info().try_borrow_mut_lamports()? -= return_amount;
+        **ctx.accounts.operator.to_account_info().try_borrow_mut_lamports()?     += return_amount;
+
+        ctx.accounts.escrow_vault.deposited_lamports = 0;
+        ctx.accounts.operator_registry.is_active = false;
+
+        Ok(())
+    }
 }
 
-// Move SOL from operator wallet → into escrow vault --> Then update: deposited_lamports
-
-pub fn deposit_bond(ctx : Context<DepositBond>, amount_lamports : u64)-> Result<()>{
-    require!(amount_lamports > 0, VeloraError::ZeroDeposit);
-    let cpi_ctx = CpiContext::new(
-        ctx.accounts.system_program.to_account_info(),
-        system_program::Transfer {
-            from : ctx.accounts.operator.to_account_info(),
-            to   : ctx.accounts.escrow_vault.to_account_info(),
-        }
-    );
-
-    system_program::transfer(cpi_ctx, amount_lamports);
-
-    let vault = &mut ctx.accounts.escrow_vault;
-    vault.deposited_lamports = vault
-            .deposited_lamports
-            .checked_add(amount_lamports)
-            .ok_or(VeloraError::MathOverflow)?;
-
-    Ok(())
-
-
-}
-
-pub fn deregister_operator(ctx: Context<DeregisterOperator>) -> Result<()>{
-    let vault = &ctx.accounts.escrow_vault;
-    require!(vault.deposited_lamports > 0, VeloraError::NoBondDeposited);
-    let return_amount = vault.deposited_lamports;
-    **ctx.accounts.escrow_vault.to_account_info().try_borrow_mut_lamports()? -= return_amount;
-    **ctx.accounts.operator.to_account_info().try_borrow_mut_lamports()?     += return_amount;
-
-    ctx.accounts.escrow_vault.deposited_lamports = 0;
-    ctx.accounts.operator_registry.is_active = false;
-
-    Ok(())
-}
 
 
 

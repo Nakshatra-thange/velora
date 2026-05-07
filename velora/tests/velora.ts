@@ -1,8 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, BN } from "@coral-xyz/anchor";
 import { Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
-import { startAnchor } from "anchor-bankrun";
-import { BankrunProvider } from "anchor-bankrun";
 import { assert } from "chai";
 import { Velora } from "../target/types/velora";
 
@@ -10,7 +8,6 @@ import { Velora } from "../target/types/velora";
 //  HELPERS
 // ─────────────────────────────────────────────
 
-/** Derive the OperatorRegistry PDA for a given operator pubkey */
 function getOperatorRegistryPDA(
   operatorPubkey: PublicKey,
   programId: PublicKey
@@ -21,7 +18,6 @@ function getOperatorRegistryPDA(
   );
 }
 
-/** Derive the EscrowVault PDA for a given operator pubkey */
 function getEscrowVaultPDA(
   operatorPubkey: PublicKey,
   programId: PublicKey
@@ -37,31 +33,27 @@ function getEscrowVaultPDA(
 // ─────────────────────────────────────────────
 
 describe("velora", () => {
-  // shared across tests
-  let context: Awaited<ReturnType<typeof startAnchor>>;
-  let provider: BankrunProvider;
-  let program: Program<Velora>;
+  const provider = anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
 
-  // a fresh operator keypair for each test that needs one
+  const program = anchor.workspace.Velora as Program<Velora>;
+  const connection = provider.connection;
+
+  // fresh operator keypair per test — no shared state
   let operator: Keypair;
 
-  before(async () => {
-    // Bankrun spins up a local validator in-process — much faster than `anchor test`
-    context = await startAnchor(".", [], []);
-    provider = new BankrunProvider(context);
-    anchor.setProvider(provider);
-
-    program = anchor.workspace.Velora as Program<Velora>;
-  });
-
-  // give each test a fresh operator so they don't share state
   beforeEach(() => {
     operator = Keypair.generate();
   });
 
-  // ── utility: airdrop SOL to any keypair inside Bankrun ──
+  // airdrop using standard connection.requestAirdrop + confirmTransaction
   async function airdrop(pubkey: PublicKey, sol: number) {
-    await context.banksClient.requestAirdrop(pubkey, sol * LAMPORTS_PER_SOL);
+    const sig = await connection.requestAirdrop(pubkey, sol * LAMPORTS_PER_SOL);
+    const latestBlockhash = await connection.getLatestBlockhash();
+    await connection.confirmTransaction({
+      signature: sig,
+      ...latestBlockhash,
+    });
   }
 
   // ─────────────────────────────────────────────
@@ -84,14 +76,12 @@ describe("velora", () => {
       .signers([operator])
       .rpc();
 
-    // fetch and assert OperatorRegistry
     const registry = await program.account.operatorRegistry.fetch(registryPDA);
     assert.equal(registry.operator.toBase58(), operator.publicKey.toBase58());
     assert.equal(registry.feeBps, feeBps);
     assert.isTrue(registry.isActive);
     assert.isAbove(registry.registeredAt.toNumber(), 0);
 
-    // fetch and assert EscrowVault
     const vault = await program.account.escrowVault.fetch(vaultPDA);
     assert.equal(vault.operator.toBase58(), operator.publicKey.toBase58());
     assert.equal(vault.depositedLamports.toNumber(), 0);
@@ -106,7 +96,6 @@ describe("velora", () => {
     const [registryPDA] = getOperatorRegistryPDA(operator.publicKey, program.programId);
     const [vaultPDA]    = getEscrowVaultPDA(operator.publicKey, program.programId);
 
-    // must register first
     await program.methods
       .registerOperator(100)
       .accounts({
@@ -117,10 +106,8 @@ describe("velora", () => {
       .signers([operator])
       .rpc();
 
-    const depositAmount = new BN(5 * LAMPORTS_PER_SOL);
-
     await program.methods
-      .depositBond(depositAmount)
+      .depositBond(new BN(5 * LAMPORTS_PER_SOL))
       .accounts({
         operator:    operator.publicKey,
         escrowVault: vaultPDA,
@@ -151,14 +138,14 @@ describe("velora", () => {
       escrowVault:      vaultPDA,
     };
 
-    // first registration — should succeed
+    // first — succeeds
     await program.methods
       .registerOperator(200)
       .accounts(accounts)
       .signers([operator])
       .rpc();
 
-    // second registration — must throw because the PDA already exists
+    // second — must throw
     try {
       await program.methods
         .registerOperator(200)
@@ -166,24 +153,21 @@ describe("velora", () => {
         .signers([operator])
         .rpc();
 
-      // if we reach here the test must fail
       assert.fail("Expected duplicate registration to throw but it did not");
     } catch (err: any) {
-      // Anchor throws when `init` tries to create an already-initialised account
-      assert.ok(err, "Error was thrown as expected");
+      assert.ok(err, "Error was thrown as expected for duplicate PDA init");
     }
   });
 
   // ─────────────────────────────────────────────
-  //  TEST 4 — deregister and reclaim bond
+  //  TEST 4 — full lifecycle: register → deposit → deregister
   // ─────────────────────────────────────────────
-  it("deregisters the operator, sets isActive = false, returns bond to wallet", async () => {
+  it("deregisters the operator, sets isActive=false, returns bond to wallet", async () => {
     await airdrop(operator.publicKey, 10);
 
     const [registryPDA] = getOperatorRegistryPDA(operator.publicKey, program.programId);
     const [vaultPDA]    = getEscrowVaultPDA(operator.publicKey, program.programId);
 
-    // register
     await program.methods
       .registerOperator(75)
       .accounts({
@@ -194,7 +178,6 @@ describe("velora", () => {
       .signers([operator])
       .rpc();
 
-    // deposit 3 SOL
     await program.methods
       .depositBond(new BN(3 * LAMPORTS_PER_SOL))
       .accounts({
@@ -204,10 +187,8 @@ describe("velora", () => {
       .signers([operator])
       .rpc();
 
-    // record operator balance before deregister
-    const balanceBefore = await context.banksClient.getBalance(operator.publicKey);
+    const balanceBefore = await connection.getBalance(operator.publicKey);
 
-    // deregister
     await program.methods
       .deregisterOperator()
       .accounts({
@@ -218,21 +199,14 @@ describe("velora", () => {
       .signers([operator])
       .rpc();
 
-    // assert registry is inactive
     const registry = await program.account.operatorRegistry.fetch(registryPDA);
     assert.isFalse(registry.isActive, "isActive should be false after deregister");
 
-    // assert vault is drained
     const vault = await program.account.escrowVault.fetch(vaultPDA);
-    assert.equal(vault.depositedLamports.toNumber(), 0, "vault should be empty");
+    assert.equal(vault.depositedLamports.toNumber(), 0, "vault should be drained");
 
-    // assert operator got their SOL back (balance increased)
-    const balanceAfter = await context.banksClient.getBalance(operator.publicKey);
-    assert.isAbove(
-      Number(balanceAfter),
-      Number(balanceBefore),
-      "operator balance should increase after bond returned"
-    );
+    const balanceAfter = await connection.getBalance(operator.publicKey);
+    assert.isAbove(balanceAfter, balanceBefore, "operator should get SOL back");
   });
 
   // ─────────────────────────────────────────────
@@ -244,7 +218,6 @@ describe("velora", () => {
     const [registryPDA] = getOperatorRegistryPDA(operator.publicKey, program.programId);
     const [vaultPDA]    = getEscrowVaultPDA(operator.publicKey, program.programId);
 
-    // register but DO NOT deposit
     await program.methods
       .registerOperator(300)
       .accounts({
@@ -255,7 +228,6 @@ describe("velora", () => {
       .signers([operator])
       .rpc();
 
-    // deregister without depositing — must throw NoBondDeposited
     try {
       await program.methods
         .deregisterOperator()
@@ -269,11 +241,10 @@ describe("velora", () => {
 
       assert.fail("Expected NoBondDeposited error but instruction succeeded");
     } catch (err: any) {
-      // check it's our custom error, not a generic network error
       assert.include(
         err.toString(),
         "NoBondDeposited",
-        "Error should be VeloraError::NoBondDeposited"
+        "Should throw VeloraError::NoBondDeposited"
       );
     }
   });

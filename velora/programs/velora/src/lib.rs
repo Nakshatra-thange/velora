@@ -160,6 +160,47 @@ pub struct EscrowVault {
     pub bump:               u8,     
 }
 
+#[account]
+pub struct ScoreCard {
+    pub operator:          Pubkey, 
+    pub ema_reliability:   u64,    
+    pub total_volume:      u64,   
+    pub fulfillment_count: u64,    
+    pub slash_count:       u8,     
+    pub last_updated:      i64,    
+    pub bump:              u8,     
+}        
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct FulfillmentProof {
+    pub amount:     u64,    
+    pub latency_ms: u32,    
+    pub merchant:   Pubkey, 
+    pub operator:   Pubkey, 
+}   
+
+pub fn compute_fulfillment_score(latency_ms: u32) -> u64 {
+    let latency = latency_ms as u64;
+    let max     = MAX_ACCEPTABLE_LATENCY_MS as u64;
+    let denom   = 2 * max; // 4_000
+ 
+    if latency >= denom {
+        return 0; // so slow it scores zero
+    }
+ 
+    // SCALE - (SCALE * latency / denom)
+    // safe: latency < denom so (SCALE * latency / denom) < SCALE
+    SCALE - (SCALE * latency / denom)
+}
+ 
+pub fn update_ema(old_ema: u64, new_score: u64) -> Result<u64> {
+    let weighted_old   = EMA_ALPHA.checked_mul(old_ema).ok_or(VeloraError::MathOverflow)?;
+    let weighted_new   = EMA_BETA.checked_mul(new_score).ok_or(VeloraError::MathOverflow)?;
+    let numerator      = weighted_old.checked_add(weighted_new).ok_or(VeloraError::MathOverflow)?;
+    let new_ema        = numerator.checked_div(SCALE).ok_or(VeloraError::MathOverflow)?;
+    Ok(new_ema)
+}
+
 #[error_code]
 pub enum VeloraError {
     #[msg("Fee basis points must be less than 10000 (100%)")]

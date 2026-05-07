@@ -1,6 +1,9 @@
 use anchor_lang::system_program;
-
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::{
+    sysvar::instructions,
+};
+
 
 declare_id!("EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV");
 pub const SCALE: u64 = 1_000_000;
@@ -107,15 +110,16 @@ pub mod velora {
             VeloraError::UnauthorizedOperator
         );
         let ix_sysvar = &ctx.accounts.instructions_sysvar;
-        let ed25519_ix = solana_program::sysvar::instructions::load_instruction_at_checked(
-            solana_program::sysvar::instructions::load_current_index_checked(
+        let ed25519_ix = instructions::load_instruction_at_checked(
+            instructions::load_current_index_checked(
                 &ix_sysvar.to_account_info()
             )? as usize - 1,  // the preceding instruction
             &ix_sysvar.to_account_info(),
         ).map_err(|_| VeloraError::InvalidMerchantSignature)?;
 
         require!(
-            ed25519_ix.program_id == solana_program::ed25519_program::ID,
+            ed25519_ix.program_id.to_string()
+    == "Ed25519SigVerify111111111111111111111111111",
             VeloraError::InvalidMerchantSignature
         );
 
@@ -354,9 +358,8 @@ pub struct SubmitProof<'info> {
         has_one = operator @ VeloraError::UnauthorizedOperator,
     )]
     pub escrow_vault: Account<'info, EscrowVault>,
- 
-    /// CHECK: this is the instructions sysvar — read-only, verified by address
-    #[account(address = solana_program::sysvar::instructions::ID)]
+
+    #[account(address = instructions::ID)]
     pub instructions_sysvar: UncheckedAccount<'info>,
 }
  

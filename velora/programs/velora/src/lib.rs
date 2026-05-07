@@ -10,6 +10,7 @@ pub const SLASH_THRESHOLD: u64 = 700_000; //threshold
 pub const SLASH_BPS: u64 = 2_000; //basis pt
 pub const MIN_BOND_LAMPORTS: u64 = 1_000_000_000; //min bond lamports
 pub const MAX_ACCEPTABLE_LATENCY_MS: u32 = 2_000; 
+
 #[program]
 pub mod velora {
     use super::*;
@@ -66,8 +67,31 @@ pub mod velora {
 
         Ok(())
     }
-    // ── Week 2 / Day 2 placeholder ─────────────
-    // initialize_scorecard goes here tomorrow
+    pub fn initialize_scorecard(ctx: Context<InitializeScoreCard>) -> Result<()> {
+        // guard 1 — operator must be active (registered and not deregistered)
+        require!(
+            ctx.accounts.operator_registry.is_active,
+            VeloraError::InactiveOperator
+        );
+ 
+        // guard 2 — operator must have skin in the game before getting a scorecard
+        require!(
+            ctx.accounts.escrow_vault.deposited_lamports >= MIN_BOND_LAMPORTS,
+            VeloraError::InsufficientBond
+        );
+ 
+        let score_card = &mut ctx.accounts.score_card;
+        score_card.operator          = ctx.accounts.operator.key();
+        score_card.ema_reliability   = SCALE; // starts at 1_000_000 = 100%
+        score_card.total_volume      = 0;
+        score_card.fulfillment_count = 0;
+        score_card.slash_count       = 0;
+        score_card.last_updated      = Clock::get()?.unix_timestamp;
+        score_card.bump              = ctx.bumps.score_card;
+ 
+        Ok(())
+    }
+   
  
     // ── Week 2 / Day 3 placeholder ─────────────
     // submit_proof goes here
@@ -142,6 +166,39 @@ pub struct DeregisterOperator<'info> {
 
 }
  
+#[derive(Accounts)]
+pub struct InitializeScoreCard<'info> {
+    #[account(mut)]
+    pub operator: Signer<'info>,
+ 
+    // read-only — we only check is_active, no mutation
+    #[account(
+        seeds   = [b"operator", operator.key().as_ref()],
+        bump    = operator_registry.bump,
+        has_one = operator @ VeloraError::UnauthorizedOperator,
+    )]
+    pub operator_registry: Account<'info, OperatorRegistry>,
+ 
+    // read-only — we only check deposited_lamports
+    #[account(
+        seeds   = [b"escrow", operator.key().as_ref()],
+        bump    = escrow_vault.bump,
+        has_one = operator @ VeloraError::UnauthorizedOperator,
+    )]
+    pub escrow_vault: Account<'info, EscrowVault>,
+ 
+    // space: 8 + 32 + 8 + 8 + 8 + 1 + 8 + 1 = 74 + 8 discriminator = 82
+    #[account(
+        init,
+        payer  = operator,
+        space  = 8 + 32 + 8 + 8 + 8 + 1 + 8 + 1,
+        seeds  = [b"score", operator.key().as_ref()],
+        bump
+    )]
+    pub score_card: Account<'info, ScoreCard>,
+ 
+    pub system_program: Program<'info, System>,
+}
 
 #[account]
 pub struct OperatorRegistry {
@@ -236,6 +293,5 @@ pub enum VeloraError {
     #[msg("Merchant co-signature verification failed")]
     InvalidMerchantSignature,
  
-    #[msg("Math overflow in fixed-point calculation")]
-    MathOverflow,
+   
 }

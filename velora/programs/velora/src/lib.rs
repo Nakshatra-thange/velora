@@ -226,4 +226,16 @@ pub enum VeloraError {
 
     #[msg("Deposit amount must be greater than zero")]
     ZeroDeposit,
+
+    #[msg("Operator is not active — register first")]
+    InactiveOperator,
+
+    #[msg("Operator has already been slashed and deactivated")]
+    AlreadySlashed,
+
+    #[msg("Merchant co-signature verification failed")]
+    InvalidMerchantSignature,
+ 
+    #[msg("Math overflow in fixed-point calculation")]
+    MathOverflow,
 }

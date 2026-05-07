@@ -68,13 +68,12 @@ pub mod velora {
         Ok(())
     }
     pub fn initialize_scorecard(ctx: Context<InitializeScoreCard>) -> Result<()> {
-        // guard 1 — operator must be active (registered and not deregistered)
+
         require!(
             ctx.accounts.operator_registry.is_active,
             VeloraError::InactiveOperator
         );
  
-        // guard 2 — operator must have skin in the game before getting a scorecard
         require!(
             ctx.accounts.escrow_vault.deposited_lamports >= MIN_BOND_LAMPORTS,
             VeloraError::InsufficientBond
@@ -90,6 +89,27 @@ pub mod velora {
         score_card.bump              = ctx.bumps.score_card;
  
         Ok(())
+    }
+
+    pub fn submit_proof(ctx: Context<SubmitProof>, proof:FulfillmentProof)->Result<()>{
+        require!(
+            ctx.accounts.operator_registry.is_active,
+            VeloraError::InactiveOperator
+        );
+
+        require!(
+            ctx.accounts.escrow_vault.deposited_lamports >= MIN_BOND_LAMPORTS,
+            VeloraError::InsufficientBond
+        );
+ 
+        require!(
+            proof.operator == ctx.accounts.operator.key(),
+            VeloraError::UnauthorizedOperator
+        );
+
+        
+
+
     }
    
  

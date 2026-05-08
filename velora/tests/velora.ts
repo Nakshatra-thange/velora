@@ -142,11 +142,11 @@ describe("velora — week 2", () => {
     const sig = nacl.sign.detached(proofBytes, merchant.secretKey);
 
     // ed25519 precompile instruction — must be ix[0] in the transaction
-    const ed25519Ix = Ed25519Program.createInstructionWithPublicKey({
-      publicKey:  merchant.publicKey.toBytes(),
+    const ed25519Ix = Ed25519Program.createInstructionWithPrivateKey({
+      privateKey: merchant.secretKey,
       message:    proofBytes,
-      signature:  sig,
     });
+
 
     // build the submit_proof anchor instruction
     const submitIx = await program.methods
@@ -169,12 +169,9 @@ describe("velora — week 2", () => {
     // both instructions in one atomic transaction
     // ed25519 ix MUST come before submit_proof so load_current_index - 1 points to it
     const tx         = new Transaction().add(ed25519Ix, submitIx);
-    tx.feePayer       = operator.publicKey;
-    tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-    tx.sign(operator);
+   
 
-    const txSig = await connection.sendRawTransaction(tx.serialize());
-    await confirm(connection, txSig);
+    const txSig = await provider.sendAndConfirm(tx, [operator]);
   }
 
   // ═══════════════════════════════════════════════

@@ -359,8 +359,10 @@ pub struct SubmitProof<'info> {
     )]
     pub escrow_vault: Account<'info, EscrowVault>,
 
-    #[account(address = instructions::ID)]
-    pub instructions_sysvar: UncheckedAccount<'info>,
+    /// CHECK: This is the Solana instructions sysvar used for
+/// ed25519 instruction introspection. Address is verified in constraints.
+#[account(address = instructions::ID)]
+pub instructions_sysvar: AccountInfo<'info>,
 }
  
 #[derive(Accounts)]

@@ -623,6 +623,34 @@ pub struct OperatorSlashed {
     pub ema_at_slash:   u64,
 }
 
+
+ 
+
+#[event]
+pub struct EpochInitialised {
+    pub epoch_number: u64,
+    pub start_slot:   u64,
+    pub epoch_budget: u64,
+}
+ 
+#[event]
+pub struct EpochAdvanced {
+    pub old_epoch:      u64,
+    pub new_epoch:      u64,
+    pub old_emitted:    u64,
+    pub new_start_slot: u64,
+}
+ 
+#[event]
+pub struct EmissionClaimed {
+    pub operator:         Pubkey,
+    pub epoch_number:     u64,
+    pub amount_minted:    u64,
+    pub ema_at_claim:     u64,
+    pub volume_at_claim:  u64,
+    pub budget_remaining: u64,
+}
+
 #[account]
 pub struct OperatorRegistry {
     pub operator:      Pubkey, 
@@ -701,40 +729,90 @@ pub fn isqrt(n: u64) -> u64 {
     x
 }
 
+pub fn pow_1_5_scaled(x: u64) -> u64 {
+    if x == 0 { return 0; }
+    let inner = x.saturating_mul(SCALE);    // upscale: x × 10^6
+    let sq    = isqrt(inner);               // ≈ sqrt(x) × 10^3
+    let denom = SCALE * isqrt(SCALE);       // 10^6 × 10^3 = 10^9
+    x.saturating_mul(sq) / denom
+}
+
+pub fn log_scaled(x: u64) -> u64 {
+    if x <= 1 { return 0; }
+    let bits  = 63 - x.leading_zeros() as u64; // floor(log2(x))
+    // ln(x) ≈ bits × ln(2), ln(2) ≈ 0.693147
+    // scaled: bits × 693_147 / 1_000_000 × SCALE  = bits × 693_147
+    bits.saturating_mul(693_147)
+}
+
+pub fn compute_emission(
+    ema_reliability:  u64,
+    total_volume:     u64,
+    budget_remaining: u64,
+    budget_total:     u64,
+) -> u64 {
+    if budget_remaining == 0 || budget_total == 0 { return 0; }
+ 
+    // ema_factor: ema^1.5 in [0, SCALE]
+    let ema_factor = pow_1_5_scaled(ema_reliability);
+ 
+    // volume_factor: log(volume+1) normalised to [0, SCALE]
+    // cap log at log(1_000_000 SOL in lamports) ≈ log(10^15) ≈ 50 bits
+    // log_scaled(10^15) ≈ 50 × 693_147 = 34_657_350
+    const LOG_CAP: u64 = 34_657_350;
+    let volume_log    = log_scaled(total_volume.saturating_add(1)).min(LOG_CAP);
+    let volume_factor = volume_log.saturating_mul(SCALE) / LOG_CAP; // → [0, SCALE]
+ 
+    // budget_factor: how much of this epoch's budget is left
+    let budget_factor = budget_remaining
+        .saturating_mul(SCALE)
+        .checked_div(budget_total)
+        .unwrap_or(0);
+ 
+    // combine all three factors with BASE_RATE.
+    // divide by SCALE after each multiply to stay in u64 range.
+    // order: BASE_RATE → apply ema → apply volume → apply budget
+    let step1 = BASE_EMISSION_RATE.saturating_mul(ema_factor) / SCALE;
+    let step2 = step1.saturating_mul(volume_factor) / SCALE;
+    let step3 = step2.saturating_mul(budget_factor) / SCALE;
+    step3
+}
+
+
+
+
+
 #[error_code]
 pub enum VeloraError {
-    #[msg("Fee basis points must be less than 10000 (100%)")]
+    #[msg("Fee basis points must be less than 10000")]
     FeeTooHigh,
- 
-    #[msg("Operator already registered")]
-    AlreadyRegistered,
-
-    #[msg("No bond deposited — nothing to return")]
-    NoBondDeposited,
- 
-    #[msg("Signer is not the operator of this account")]
-    UnauthorizedOperator,
- 
-    #[msg("Math overflow")]
-    MathOverflow,
-
-    #[msg("Insufficient bond deposited")]
-    InsufficientBond,
- 
-    #[msg("Slash condition not met")]
-    SlashConditionNotMet,
-
     #[msg("Deposit amount must be greater than zero")]
     ZeroDeposit,
-
+    #[msg("No bond deposited — nothing to return")]
+    NoBondDeposited,
+    #[msg("Signer is not the operator of this account")]
+    UnauthorizedOperator,
     #[msg("Operator is not active — register first")]
     InactiveOperator,
-
+    #[msg("Bond is below the minimum required")]
+    InsufficientBond,
+    #[msg("Operator reliability is above slash threshold")]
+    SlashConditionNotMet,
     #[msg("Operator has already been slashed and deactivated")]
     AlreadySlashed,
-
     #[msg("Merchant co-signature verification failed")]
     InvalidMerchantSignature,
- 
-   
+    #[msg("Math overflow")]
+    MathOverflow,
+    // Week 3
+    #[msg("Epoch has not elapsed yet — too early to advance")]
+    EpochNotElapsed,
+    #[msg("Epoch number does not match current epoch")]
+    EpochMismatch,
+    #[msg("Operator has already claimed emission this epoch")]
+    AlreadyClaimedThisEpoch,
+    #[msg("Not enough proofs submitted to claim emission")]
+    InsufficientProofs,
+    #[msg("Epoch budget exhausted for this epoch")]
+    EpochBudgetExhausted,
 }

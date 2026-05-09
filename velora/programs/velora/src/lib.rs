@@ -262,6 +262,89 @@ pub fn initialize_epoch(
 
     Ok(())
 }
+
+pub fn claim_emission(ctx: Context<ClaimEmission>, epoch_number: u64) -> Result<()> {
+    let sc    = &ctx.accounts.score_card;
+    let epoch = &ctx.accounts.epoch_state;
+
+    // ── guard 1: operator must be active ──
+    require!(
+        ctx.accounts.operator_registry.is_active,
+        VeloraError::InactiveOperator
+    );
+
+    // ── guard 2: must have submitted minimum proofs ──
+    require!(
+        sc.fulfillment_count >= MIN_PROOFS_FOR_EMISSION,
+        VeloraError::InsufficientProofs
+    );
+
+    // ── guard 3: cannot double-claim in same epoch ──
+    require!(
+        sc.last_claim_epoch != epoch_number,
+        VeloraError::AlreadyClaimedThisEpoch
+    );
+
+    // ── guard 4: epoch must still have budget ──
+    let budget_remaining = epoch.epoch_budget
+        .checked_sub(epoch.epoch_emitted)
+        .unwrap_or(0);
+    require!(budget_remaining > 0, VeloraError::EpochBudgetExhausted);
+
+    // ── compute emission amount ──
+    let mut amount = compute_emission(
+        sc.ema_reliability,
+        sc.total_volume,
+        budget_remaining,
+        epoch.epoch_budget,
+    );
+
+    // clamp to remaining budget — never over-mint
+    amount = amount.min(budget_remaining);
+
+    // ── CPI: mint tokens to operator's ATA ──
+    // The mint PDA signs using seeds [MINT_SEED, bump].
+    // This is the ONLY place in the entire program that calls mint_to.
+    if amount > 0 {
+        let mint_bump   = ctx.bumps.mint;
+        let mint_seeds: &[&[u8]] = &[MINT_SEED, &[mint_bump]];
+        let signer_seeds         = &[mint_seeds];
+
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            anchor_spl::token_interface::MintTo {
+                mint:      ctx.accounts.mint.to_account_info(),
+                to:        ctx.accounts.operator_token_account.to_account_info(),
+                authority: ctx.accounts.mint.to_account_info(), // PDA signs
+            },
+            signer_seeds,
+        );
+        anchor_spl::token_interface::mint_to(cpi_ctx, amount)?;
+    }
+
+    // ── update epoch emitted counter ──
+    let epoch_mut = &mut ctx.accounts.epoch_state;
+    epoch_mut.epoch_emitted = epoch_mut
+        .epoch_emitted
+        .checked_add(amount)
+        .ok_or(VeloraError::MathOverflow)?;
+
+    // ── update scorecard: mark this epoch as claimed ──
+    let sc_mut = &mut ctx.accounts.score_card;
+    sc_mut.last_claim_epoch = epoch_number;
+
+    // ── emit event ──
+    emit!(EmissionClaimed {
+        operator:       ctx.accounts.operator.key(),
+        epoch_number,
+        amount_minted:  amount,
+        ema_at_claim:   sc_mut.ema_reliability,
+        volume_at_claim: sc_mut.total_volume,
+        budget_remaining: budget_remaining.saturating_sub(amount),
+    });
+
+    Ok(())
+}
 pub fn advance_epoch(
     ctx:                  Context<AdvanceEpoch>,
     current_epoch_number: u64,
@@ -516,9 +599,6 @@ pub struct InitializeMint<'info> {
 pub struct InitializeEpoch<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
- 
-    /// EpochState PDA — one per epoch number.
-    /// space: 8 + 8 + 8 + 8 + 8 + 1 = 41 + 8 discriminator = 49
     #[account(
         init,
         payer  = payer,
@@ -673,6 +753,7 @@ pub struct ScoreCard {
     pub operator:          Pubkey, 
     pub ema_reliability:   u64,    
     pub total_volume:      u64,   
+    pub last_claim_epoch: u64,
     pub fulfillment_count: u64,    
     pub slash_count:       u8,     
     pub last_updated:      i64,    

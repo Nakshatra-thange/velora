@@ -3,6 +3,11 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{
     sysvar::instructions,
 };
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token_2022::Token2022,
+    token_interface::{Mint, TokenAccount},
+};
 
 
 declare_id!("EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV");
@@ -13,6 +18,13 @@ pub const SLASH_THRESHOLD: u64 = 700_000; //threshold
 pub const SLASH_BPS: u64 = 2_000; //basis pt
 pub const MIN_BOND_LAMPORTS: u64 = 1_000_000_000; //min bond lamports
 pub const MAX_ACCEPTABLE_LATENCY_MS: u32 = 2_000; 
+pub const EPOCH_SLOTS: u64 = 172_800;
+pub const EPOCH_BUDGET: u64 = 1_000_000_000_000;
+pub const TOKEN_DECIMALS: u8 = 6;
+pub const MIN_PROOFS_FOR_EMISSION: u64 = 5;
+pub const BASE_EMISSION_RATE: u64 = 100_000_000; 
+pub const MINT_SEED: &[u8] = b"velora_mint";
+pub const EPOCH_SEED: &[u8] = b"epoch";
 
 #[program]
 pub mod velora {
@@ -226,6 +238,32 @@ emit!(OperatorSlashed {
 
 Ok(())
 }
+
+pub fn initialize_mint(_ctx: Context<InitializeMint>)-> Result<()>{
+    msg!("Velora mint ready.");
+    Ok(())
+}
+pub fn initialize_epoch(
+    ctx:Context<InitializeEpoch>, epoch_number: u64,
+) -> Result<()> {
+    let clock = Clock::get()?;
+    let epoch = &mut ctx.accounts.epoch_state;
+    epoch.epoch_number     = epoch_number;
+    epoch.epoch_start_slot = clock.slot;
+    epoch.epoch_budget     = EPOCH_BUDGET;
+    epoch.epoch_emitted    = 0;
+    epoch.bump             = ctx.bumps.epoch_state;
+
+    emit!(EpochInitialised {
+        epoch_number,
+        start_slot:   clock.slot,
+        epoch_budget: EPOCH_BUDGET,
+    });
+
+    Ok(())
+}
+
+
 }
 
  

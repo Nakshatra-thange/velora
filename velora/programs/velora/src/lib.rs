@@ -262,9 +262,50 @@ pub fn initialize_epoch(
 
     Ok(())
 }
+pub fn advance_epoch(
+    ctx:                  Context<AdvanceEpoch>,
+    current_epoch_number: u64,
+) -> Result<()> {
+    let clock = Clock::get()?;
+    let old   = &ctx.accounts.current_epoch_state;
 
+    // guard 1: caller must supply the correct epoch number
+    // prevents passing a stale epoch PDA to game the advance
+    require!(
+        old.epoch_number == current_epoch_number,
+        VeloraError::EpochMismatch
+    );
 
+    // guard 2: epoch must have fully elapsed — strict slot check
+    // saturating_sub prevents underflow if slot somehow goes backwards
+    let elapsed = clock.slot.saturating_sub(old.epoch_start_slot);
+    require!(elapsed >= EPOCH_SLOTS, VeloraError::EpochNotElapsed);
+
+    let new_number = current_epoch_number
+        .checked_add(1)
+        .ok_or(VeloraError::MathOverflow)?;
+
+    // initialise the next epoch PDA with a fresh full budget
+    let next = &mut ctx.accounts.next_epoch_state;
+    next.epoch_number     = new_number;
+    next.epoch_start_slot = clock.slot;
+    next.epoch_budget     = EPOCH_BUDGET;
+    next.epoch_emitted    = 0;
+    next.bump             = ctx.bumps.next_epoch_state;
+
+    emit!(EpochAdvanced {
+        old_epoch:      current_epoch_number,
+        new_epoch:      new_number,
+        old_emitted:    old.epoch_emitted,
+        new_start_slot: clock.slot,
+    });
+
+    Ok(())
 }
+}
+
+
+
 
  
 
@@ -442,6 +483,135 @@ pub struct ProofSubmitted {
     pub new_ema:           u64,  // updated EMA after this proof
     pub fulfillment_count: u64,
 }
+
+#[derive(Accounts)]
+pub struct InitializeMint<'info> {
+    /// Anyone can pay to create the mint — permissionless.
+    #[account(mut)]
+    pub payer: Signer<'info>,
+ 
+    /// The single global Velora mint PDA.
+    /// Mint authority = this PDA itself (program controls all minting).
+    /// Freeze authority = None (tokens are non-freezable).
+    ///
+    /// space for a Token-2022 Mint with no extensions:
+    ///   Mint base size = 82 bytes (from spl_token_2022::state::Mint::LEN)
+    #[account(
+        init,
+        payer     = payer,
+        seeds     = [MINT_SEED],
+        bump,
+        mint::decimals  = TOKEN_DECIMALS,
+        mint::authority = mint,         // PDA is its own mint authority
+        mint::token_program = token_program,
+    )]
+    pub mint: InterfaceAccount<'info, Mint>,
+ 
+    pub token_program:  Program<'info, Token2022>,
+    pub system_program: Program<'info, System>,
+}
+ 
+#[derive(Accounts)]
+#[instruction(epoch_number: u64)]
+pub struct InitializeEpoch<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+ 
+    /// EpochState PDA — one per epoch number.
+    /// space: 8 + 8 + 8 + 8 + 8 + 1 = 41 + 8 discriminator = 49
+    #[account(
+        init,
+        payer  = payer,
+        space  = 8 + 8 + 8 + 8 + 8 + 1,
+        seeds  = [EPOCH_SEED, &epoch_number.to_le_bytes()],
+        bump
+    )]
+    pub epoch_state: Account<'info, EpochState>,
+ 
+    pub system_program: Program<'info, System>,
+}
+ 
+#[derive(Accounts)]
+#[instruction(current_epoch_number: u64)]
+pub struct AdvanceEpoch<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+ 
+    /// The epoch that is being closed out — must have elapsed.
+    #[account(
+        seeds  = [EPOCH_SEED, &current_epoch_number.to_le_bytes()],
+        bump   = current_epoch_state.bump,
+    )]
+    pub current_epoch_state: Account<'info, EpochState>,
+ 
+    /// The new epoch being initialised — must not exist yet.
+    #[account(
+        init,
+        payer  = payer,
+        space  = 8 + 8 + 8 + 8 + 8 + 1,
+        seeds  = [EPOCH_SEED, &(current_epoch_number + 1).to_le_bytes()],
+        bump
+    )]
+    pub next_epoch_state: Account<'info, EpochState>,
+ 
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(epoch_number: u64)]
+pub struct ClaimEmission<'info> {
+    #[account(mut)]
+    pub operator: Signer<'info>,
+ 
+    // read-only — only checking is_active
+    #[account(
+        seeds   = [b"operator", operator.key().as_ref()],
+        bump    = operator_registry.bump,
+        has_one = operator @ VeloraError::UnauthorizedOperator,
+    )]
+    pub operator_registry: Account<'info, OperatorRegistry>,
+ 
+    // mut — we update last_claim_epoch after minting
+    #[account(
+        mut,
+        seeds   = [b"score", operator.key().as_ref()],
+        bump    = score_card.bump,
+        has_one = operator @ VeloraError::UnauthorizedOperator,
+    )]
+    pub score_card: Account<'info, ScoreCard>,
+ 
+    // mut — we update epoch_emitted after minting
+    #[account(
+        mut,
+        seeds  = [EPOCH_SEED, &epoch_number.to_le_bytes()],
+        bump   = epoch_state.bump,
+    )]
+    pub epoch_state: Account<'info, EpochState>,
+ 
+    // mut — the global mint PDA. Signs the mint_to CPI.
+    #[account(
+        mut,
+        seeds  = [MINT_SEED],
+        bump,
+        mint::token_program = token_program,
+    )]
+    pub mint: InterfaceAccount<'info, Mint>,
+ 
+    // mut — the operator's Associated Token Account (ATA) for the Velora token.
+    // init_if_needed: creates the ATA on first claim automatically.
+    #[account(
+        init_if_needed,
+        payer               = operator,
+        associated_token::mint      = mint,
+        associated_token::authority = operator,
+        associated_token::token_program = token_program,
+    )]
+    pub operator_token_account: InterfaceAccount<'info, TokenAccount>,
+ 
+    pub token_program:            Program<'info, Token2022>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program:           Program<'info, System>,
+}
  
 #[event]
 pub struct OperatorSlashed {
@@ -487,7 +657,16 @@ pub struct FulfillmentProof {
     pub latency_ms: u32,    
     pub merchant:   Pubkey, 
     pub operator:   Pubkey, 
-}   
+}  
+
+#[account]
+pub struct EpochState {
+    pub epoch_number:     u64, // 8
+    pub epoch_start_slot: u64, // 8
+    pub epoch_budget:     u64, // 8
+    pub epoch_emitted:    u64, // 8
+    pub bump:             u8,  // 1
+} 
 
 pub fn compute_fulfillment_score(latency_ms: u32) -> u64 {
     let latency = latency_ms as u64;
@@ -509,6 +688,17 @@ pub fn update_ema(old_ema: u64, new_score: u64) -> Result<u64> {
     let numerator      = weighted_old.checked_add(weighted_new).ok_or(VeloraError::MathOverflow)?;
     let new_ema        = numerator.checked_div(SCALE).ok_or(VeloraError::MathOverflow)?;
     Ok(new_ema)
+}
+
+pub fn isqrt(n: u64) -> u64 {
+    if n == 0 { return 0; }
+    let mut x = n;
+    let mut y = (x + 1) / 2;
+    while y < x {
+        x = y;
+        y = (x + n / x) / 2;
+    }
+    x
 }
 
 #[error_code]

@@ -484,10 +484,12 @@ pub struct InitializeScoreCard<'info> {
     #[account(
         init,
         payer  = operator,
-        space  = 8 + 32 + 8 + 8 + 8 + 1 + 8 + 1,
+        space  = 8 + 32 + 8 + 8 + 8 + 1 + 8 + 1 + 8,
         seeds  = [b"score", operator.key().as_ref()],
         bump
     )]
+
+    
     pub score_card: Account<'info, ScoreCard>,
  
     pub system_program: Program<'info, System>,

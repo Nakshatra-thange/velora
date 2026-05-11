@@ -163,18 +163,13 @@ describe("velora — week 2", () => {
         escrowVault:        pdas.vault,
         instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
       })
-      .signers([operator])
       .instruction();
 
-    // both instructions in one atomic transaction
-    // ed25519 ix MUST come before submit_proof so load_current_index - 1 points to it
-    const tx         = new Transaction().add(ed25519Ix, submitIx);
-    tx.feePayer       = operator.publicKey;
-    tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-    tx.sign(operator);
-
-    const txSig = await connection.sendRawTransaction(tx.serialize());
-    await confirm(connection, txSig);
+    // use provider.sendAndConfirm — it handles fee payer signature correctly
+    // operator signs as the signer for submit_proof
+    // ed25519 ix MUST be ix[0] so load_current_index - 1 resolves to it
+    const tx = new Transaction().add(ed25519Ix, submitIx);
+    await provider.sendAndConfirm(tx, [operator]);
   }
 
   // ═══════════════════════════════════════════════
@@ -460,25 +455,22 @@ describe("velora — week 3", () => {
   async function submitNProofs(pdas: { r: PublicKey; v: PublicKey; s: PublicKey }, n: number, latencyMs = 100) {
     for (let i = 0; i < n; i++) {
       const amount    = new BN(100_000_000);
-      const proofData = { amount, latencyMs, merchant: merchant.publicKey, operator: operator.publicKey };
       const proofBytes = serializeProof(amount, latencyMs, merchant.publicKey, operator.publicKey);
       const sig        = nacl.sign.detached(proofBytes, merchant.secretKey);
       const ed25519Ix  = Ed25519Program.createInstructionWithPublicKey({
         publicKey: merchant.publicKey.toBytes(), message: proofBytes, signature: sig,
       });
-      const submitIx = await program.methods.submitProof(proofData)
+      const submitIx = await program.methods
+        .submitProof({ amount, latencyMs, merchant: merchant.publicKey, operator: operator.publicKey })
         .accounts({
           operator: operator.publicKey, operatorRegistry: pdas.r,
           scoreCard: pdas.s, escrowVault: pdas.v,
-          instructionsSysvar: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
-        }).signers([operator]).instruction();
+          instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
+        })
+        .instruction();
 
       const tx = new Transaction().add(ed25519Ix, submitIx);
-      tx.feePayer = operator.publicKey;
-      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-      tx.sign(operator);
-      const txSig = await connection.sendRawTransaction(tx.serialize());
-      await connection.confirmTransaction({ signature: txSig, ...(await connection.getLatestBlockhash()) });
+      await provider.sendAndConfirm(tx, [operator]);
     }
   }
 

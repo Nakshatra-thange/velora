@@ -169,7 +169,7 @@ describe("velora — week 2", () => {
     // operator signs as the signer for submit_proof
     // ed25519 ix MUST be ix[0] so load_current_index - 1 resolves to it
     const tx = new Transaction().add(ed25519Ix, submitIx);
-    await provider.sendAndConfirm(tx, [operator]);
+    await provider.sendAndConfirm(tx, [operator], { skipPreflight: true });
   }
 
   // ═══════════════════════════════════════════════
@@ -477,7 +477,7 @@ describe("velora — week 3", () => {
   // ══════════════════════════════════════════════
   //  TEST 1 — initialize mint
   // ══════════════════════════════════════════════
-  it("initializes the Velora mint PDA with correct decimals and authority", async () => {
+  console.log("RUNNING MINT INIT TEST"); it("initializes the Velora mint PDA with correct decimals and authority", async () => {
     const payer   = Keypair.generate();
     await airdrop(payer.publicKey, 2);
     const mintPDA = mint();

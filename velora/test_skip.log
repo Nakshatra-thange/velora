@@ -1,0 +1,144 @@
+    Finished `release` profile [optimized] target(s) in 0.30s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.47s
+     Running unittests src/lib.rs (/Users/nakshatravijaythange/velora/velora/target/debug/deps/velora-009b22ef47d41755)
+
+Found a 'test' script in the Anchor.toml. Running it as a test suite!
+
+Running test suite: "/Users/nakshatravijaythange/velora/velora/Anchor.toml"
+
+yarn run v1.22.22
+$ /Users/nakshatravijaythange/velora/velora/node_modules/.bin/ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'
+RUNNING MINT INIT TEST
+(node:9019) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/nakshatravijaythange/velora/velora/tests/velora.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/nakshatravijaythange/velora/velora/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+  velora — week 2
+    ✔ initializes scorecard: ema = 1_000_000, all counters zero (175ms)
+    ✔ rejects scorecard init for an inactive (deregistered) operator (55ms)
+    1) valid proof: fulfillment_count+1, total_volume updated, EMA updated correctly
+    ✔ rejects scorecard init when bond < MIN_BOND_LAMPORTS (1 SOL) (85ms)
+    2) slashes operator below threshold: 20% to cranker, isActive=false, vault reduced
+    ✔ rejects slash when operator EMA is above threshold (96ms)
+
+  velora — week 3
+    3) initializes the Velora mint PDA with correct decimals and authority
+    4) initializes epoch 0 with full budget and zero emitted
+    5) claims emission: ATA balance increases, epoch_emitted updates, last_claim_epoch set
+    6) rejects a second claim in the same epoch
+    7) rejects claim when fulfillment_count < MIN_PROOFS_FOR_EMISSION
+    ✔ rejects advance_epoch before slots have elapsed
+
+
+  5 passing (1m)
+  7 failing
+
+  1) velora — week 2
+       valid proof: fulfillment_count+1, total_volume updated, EMA updated correctly:
+     TransactionExpiredTimeoutError: Transaction was not confirmed in 30.00 seconds. It is unknown if it succeeded or failed. Check signature 3W1zk7yy9mscUucK5CZJSoWGsHc6HxEoxBWRqNH9c1L6jcWfKjhWef546GF54NCBHAkRdXxHiLaHaw8E7irijrYT using the Solana Explorer or CLI tools.
+      at Connection.confirmTransactionUsingLegacyTimeoutStrategy (/Users/nakshatravijaythange/node_modules/@solana/web3.js/src/connection.ts:4248:15)
+      at Connection.confirmTransaction (/Users/nakshatravijaythange/node_modules/@solana/web3.js/src/connection.ts:3859:14)
+      at sendAndConfirmRawTransaction (/Users/nakshatravijaythange/node_modules/@coral-xyz/anchor/src/provider.ts:420:11)
+      at AnchorProvider.sendAndConfirm (/Users/nakshatravijaythange/node_modules/@coral-xyz/anchor/src/provider.ts:167:14)
+
+  2) velora — week 2
+       slashes operator below threshold: 20% to cranker, isActive=false, vault reduced:
+     TransactionExpiredTimeoutError: Transaction was not confirmed in 30.00 seconds. It is unknown if it succeeded or failed. Check signature 5ji164GatM7PU6cgUQJGpR1po9qnjMFggQ7xBgJFAavL6GF1LwFcYaCrSZKwWjgjbvyfHrRux3pHFQebZpdE9j8y using the Solana Explorer or CLI tools.
+      at Connection.confirmTransactionUsingLegacyTimeoutStrategy (/Users/nakshatravijaythange/node_modules/@solana/web3.js/src/connection.ts:4248:15)
+      at Connection.confirmTransaction (/Users/nakshatravijaythange/node_modules/@solana/web3.js/src/connection.ts:3859:14)
+      at sendAndConfirmRawTransaction (/Users/nakshatravijaythange/node_modules/@coral-xyz/anchor/src/provider.ts:420:11)
+      at AnchorProvider.sendAndConfirm (/Users/nakshatravijaythange/node_modules/@coral-xyz/anchor/src/provider.ts:167:14)
+
+  3) velora — week 3
+       initializes the Velora mint PDA with correct decimals and authority:
+     Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: custom program error: 0x0: 7 log messages:
+Program EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV invoke [1]
+Program log: Instruction: InitializeMint
+Program 11111111111111111111111111111111 invoke [2]
+Allocate: account Address { address: 8ezhov1k64VgVFYHG7S5QLRBNcUvTx85txA6q5W3FJ9E, base: None } already in use
+Program 11111111111111111111111111111111 failed: custom program error: 0x0
+Program EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV consumed 8063 of 200000 compute units
+Program EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV failed: custom program error: 0x0. 
+Logs: 
+[
+  "Program EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV invoke [1]",
+  "Program log: Instruction: InitializeMint",
+  "Program 11111111111111111111111111111111 invoke [2]",
+  "Allocate: account Address { address: 8ezhov1k64VgVFYHG7S5QLRBNcUvTx85txA6q5W3FJ9E, base: None } already in use",
+  "Program 11111111111111111111111111111111 failed: custom program error: 0x0",
+  "Program EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV consumed 8063 of 200000 compute units",
+  "Program EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV failed: custom program error: 0x0"
+]. 
+Catch the `SendTransactionError` and call `getLogs()` on it for full details.
+  
+
+  4) velora — week 3
+       initializes epoch 0 with full budget and zero emitted:
+     Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: custom program error: 0x0: 7 log messages:
+Program EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV invoke [1]
+Program log: Instruction: InitializeEpoch
+Program 11111111111111111111111111111111 invoke [2]
+Allocate: account Address { address: B8Aswv8y4DDEGkL8SKGEmwPk6jeUrxkEDo8vN58DoyLb, base: None } already in use
+Program 11111111111111111111111111111111 failed: custom program error: 0x0
+Program EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV consumed 13814 of 200000 compute units
+Program EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV failed: custom program error: 0x0. 
+Logs: 
+[
+  "Program EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV invoke [1]",
+  "Program log: Instruction: InitializeEpoch",
+  "Program 11111111111111111111111111111111 invoke [2]",
+  "Allocate: account Address { address: B8Aswv8y4DDEGkL8SKGEmwPk6jeUrxkEDo8vN58DoyLb, base: None } already in use",
+  "Program 11111111111111111111111111111111 failed: custom program error: 0x0",
+  "Program EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV consumed 13814 of 200000 compute units",
+  "Program EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV failed: custom program error: 0x0"
+]. 
+Catch the `SendTransactionError` and call `getLogs()` on it for full details.
+  
+
+  5) velora — week 3
+       claims emission: ATA balance increases, epoch_emitted updates, last_claim_epoch set:
+     Error: Simulation failed. 
+Message: Transaction simulation failed: This program may not be used for executing instructions. 
+Logs: 
+[]. 
+Catch the `SendTransactionError` and call `getLogs()` on it for full details.
+      at Connection.sendEncodedTransaction (/Users/nakshatravijaythange/node_modules/@solana/web3.js/src/connection.ts:6053:13)
+      at processTicksAndRejections (node:internal/process/task_queues:105:5)
+      at Connection.sendRawTransaction (/Users/nakshatravijaythange/node_modules/@solana/web3.js/src/connection.ts:6009:20)
+      at sendAndConfirmRawTransaction (/Users/nakshatravijaythange/node_modules/@coral-xyz/anchor/src/provider.ts:396:25)
+      at AnchorProvider.sendAndConfirm (/Users/nakshatravijaythange/node_modules/@coral-xyz/anchor/src/provider.ts:167:14)
+
+  6) velora — week 3
+       rejects a second claim in the same epoch:
+     Error: Simulation failed. 
+Message: Transaction simulation failed: This program may not be used for executing instructions. 
+Logs: 
+[]. 
+Catch the `SendTransactionError` and call `getLogs()` on it for full details.
+      at Connection.sendEncodedTransaction (/Users/nakshatravijaythange/node_modules/@solana/web3.js/src/connection.ts:6053:13)
+      at processTicksAndRejections (node:internal/process/task_queues:105:5)
+      at Connection.sendRawTransaction (/Users/nakshatravijaythange/node_modules/@solana/web3.js/src/connection.ts:6009:20)
+      at sendAndConfirmRawTransaction (/Users/nakshatravijaythange/node_modules/@coral-xyz/anchor/src/provider.ts:396:25)
+      at AnchorProvider.sendAndConfirm (/Users/nakshatravijaythange/node_modules/@coral-xyz/anchor/src/provider.ts:167:14)
+
+  7) velora — week 3
+       rejects claim when fulfillment_count < MIN_PROOFS_FOR_EMISSION:
+     Error: Simulation failed. 
+Message: Transaction simulation failed: This program may not be used for executing instructions. 
+Logs: 
+[]. 
+Catch the `SendTransactionError` and call `getLogs()` on it for full details.
+      at Connection.sendEncodedTransaction (/Users/nakshatravijaythange/node_modules/@solana/web3.js/src/connection.ts:6053:13)
+      at processTicksAndRejections (node:internal/process/task_queues:105:5)
+      at Connection.sendRawTransaction (/Users/nakshatravijaythange/node_modules/@solana/web3.js/src/connection.ts:6009:20)
+      at sendAndConfirmRawTransaction (/Users/nakshatravijaythange/node_modules/@coral-xyz/anchor/src/provider.ts:396:25)
+      at AnchorProvider.sendAndConfirm (/Users/nakshatravijaythange/node_modules/@coral-xyz/anchor/src/provider.ts:167:14)
+
+
+
+error Command failed with exit code 7.
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command.

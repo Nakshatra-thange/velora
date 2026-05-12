@@ -5,7 +5,11 @@
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
   },
   "dependencies": {
-    "@anchor-lang/core": "^0.32.1"
+    "@anchor-lang/core": "^0.32.1",
+    "@types/express": "^5.0.6",
+    "@types/uuid": "^10.0.0",
+    "express": "^5.2.1",
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.0",

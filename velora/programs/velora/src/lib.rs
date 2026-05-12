@@ -98,6 +98,7 @@ pub mod velora {
         score_card.operator          = ctx.accounts.operator.key();
         score_card.ema_reliability   = SCALE; // starts at 1_000_000 = 100%
         score_card.total_volume      = 0;
+        score_card.last_claim_epoch  = u64::MAX;
         score_card.fulfillment_count = 0;
         score_card.slash_count       = 0;
         score_card.last_updated      = Clock::get()?.unix_timestamp;
@@ -131,21 +132,44 @@ pub mod velora {
 
         require!(
             ed25519_ix.program_id.to_string()
-    == "Ed25519SigVerify111111111111111111111111111",
+                == "Ed25519SigVerify111111111111111111111111111",
             VeloraError::InvalidMerchantSignature
         );
 
         let data = &ed25519_ix.data;
-        require!(data.len() >= 1 + 14 + 64 + 32, VeloraError::InvalidMerchantSignature);
+        require!(data.len() >= 16, VeloraError::InvalidMerchantSignature);
+        require!(data[0] == 1, VeloraError::InvalidMerchantSignature);
 
-        let pubkey_offset = 1 + 14 + 64;
-        let pubkey_bytes: [u8; 32] = data[pubkey_offset..pubkey_offset + 32]
+        let read_u16 = |start: usize| -> Result<u16> {
+            let bytes: [u8; 2] = data
+                .get(start..start + 2)
+                .ok_or(VeloraError::InvalidMerchantSignature)?
+                .try_into()
+                .map_err(|_| VeloraError::InvalidMerchantSignature)?;
+            Ok(u16::from_le_bytes(bytes))
+        };
+
+        let pubkey_offset = read_u16(6)? as usize;
+        let pubkey_ix     = read_u16(8)?;
+        let message_offset = read_u16(10)? as usize;
+        let message_size   = read_u16(12)? as usize;
+        let message_ix     = read_u16(14)?;
+
+        require!(
+            pubkey_ix == u16::MAX && message_ix == u16::MAX,
+            VeloraError::InvalidMerchantSignature
+        );
+
+        let pubkey_bytes: [u8; 32] = data
+            .get(pubkey_offset..pubkey_offset + 32)
+            .ok_or(VeloraError::InvalidMerchantSignature)?
             .try_into()
             .map_err(|_| VeloraError::InvalidMerchantSignature)?;
         let recovered_pubkey = Pubkey::from(pubkey_bytes);
 
-        let message_offset = pubkey_offset + 32;
-        let signed_message  = &data[message_offset..];
+        let signed_message = data
+            .get(message_offset..message_offset + message_size)
+            .ok_or(VeloraError::InvalidMerchantSignature)?;
 
         // reconstruct the expected message: borsh(proof)
         let expected_message = proof.try_to_vec()

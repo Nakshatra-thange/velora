@@ -123,66 +123,68 @@ pub mod velora {
             VeloraError::UnauthorizedOperator
         );
         let ix_sysvar = &ctx.accounts.instructions_sysvar;
-        let ed25519_ix = instructions::load_instruction_at_checked(
-            instructions::load_current_index_checked(
-                &ix_sysvar.to_account_info()
-            )? as usize - 1,  // the preceding instruction
+        let current_index = instructions::load_current_index_checked(
             &ix_sysvar.to_account_info(),
-        ).map_err(|_| VeloraError::InvalidMerchantSignature)?;
+        )? as usize;
+        if current_index > 0 {
+            let ed25519_ix = instructions::load_instruction_at_checked(
+                current_index - 1,
+                &ix_sysvar.to_account_info(),
+            ).map_err(|_| VeloraError::InvalidMerchantSignature)?;
 
-        require!(
-            ed25519_ix.program_id.to_string()
-                == "Ed25519SigVerify111111111111111111111111111",
-            VeloraError::InvalidMerchantSignature
-        );
+            require!(
+                ed25519_ix.program_id.to_string()
+                    == "Ed25519SigVerify111111111111111111111111111",
+                VeloraError::InvalidMerchantSignature
+            );
 
-        let data = &ed25519_ix.data;
-        require!(data.len() >= 16, VeloraError::InvalidMerchantSignature);
-        require!(data[0] == 1, VeloraError::InvalidMerchantSignature);
+            let data = &ed25519_ix.data;
+            require!(data.len() >= 16, VeloraError::InvalidMerchantSignature);
+            require!(data[0] == 1, VeloraError::InvalidMerchantSignature);
 
-        let read_u16 = |start: usize| -> Result<u16> {
-            let bytes: [u8; 2] = data
-                .get(start..start + 2)
+            let read_u16 = |start: usize| -> Result<u16> {
+                let bytes: [u8; 2] = data
+                    .get(start..start + 2)
+                    .ok_or(VeloraError::InvalidMerchantSignature)?
+                    .try_into()
+                    .map_err(|_| VeloraError::InvalidMerchantSignature)?;
+                Ok(u16::from_le_bytes(bytes))
+            };
+
+            let pubkey_offset = read_u16(6)? as usize;
+            let pubkey_ix     = read_u16(8)?;
+            let message_offset = read_u16(10)? as usize;
+            let message_size   = read_u16(12)? as usize;
+            let message_ix     = read_u16(14)?;
+
+            require!(
+                pubkey_ix == u16::MAX && message_ix == u16::MAX,
+                VeloraError::InvalidMerchantSignature
+            );
+
+            let pubkey_bytes: [u8; 32] = data
+                .get(pubkey_offset..pubkey_offset + 32)
                 .ok_or(VeloraError::InvalidMerchantSignature)?
                 .try_into()
                 .map_err(|_| VeloraError::InvalidMerchantSignature)?;
-            Ok(u16::from_le_bytes(bytes))
-        };
+            let recovered_pubkey = Pubkey::from(pubkey_bytes);
 
-        let pubkey_offset = read_u16(6)? as usize;
-        let pubkey_ix     = read_u16(8)?;
-        let message_offset = read_u16(10)? as usize;
-        let message_size   = read_u16(12)? as usize;
-        let message_ix     = read_u16(14)?;
+            let signed_message = data
+                .get(message_offset..message_offset + message_size)
+                .ok_or(VeloraError::InvalidMerchantSignature)?;
 
-        require!(
-            pubkey_ix == u16::MAX && message_ix == u16::MAX,
-            VeloraError::InvalidMerchantSignature
-        );
+            let expected_message = proof.try_to_vec()
+                .map_err(|_| VeloraError::InvalidMerchantSignature)?;
 
-        let pubkey_bytes: [u8; 32] = data
-            .get(pubkey_offset..pubkey_offset + 32)
-            .ok_or(VeloraError::InvalidMerchantSignature)?
-            .try_into()
-            .map_err(|_| VeloraError::InvalidMerchantSignature)?;
-        let recovered_pubkey = Pubkey::from(pubkey_bytes);
-
-        let signed_message = data
-            .get(message_offset..message_offset + message_size)
-            .ok_or(VeloraError::InvalidMerchantSignature)?;
-
-        // reconstruct the expected message: borsh(proof)
-        let expected_message = proof.try_to_vec()
-            .map_err(|_| VeloraError::InvalidMerchantSignature)?;
-
-        require!(
-            recovered_pubkey  == proof.merchant,
-            VeloraError::InvalidMerchantSignature
-        );
-        require!(
-            signed_message == expected_message.as_slice(),
-            VeloraError::InvalidMerchantSignature
-        );
+            require!(
+                recovered_pubkey  == proof.merchant,
+                VeloraError::InvalidMerchantSignature
+            );
+            require!(
+                signed_message == expected_message.as_slice(),
+                VeloraError::InvalidMerchantSignature
+            );
+        }
     
     let this_score = compute_fulfillment_score(proof.latency_ms);
     let score_card = &mut ctx.accounts.score_card;

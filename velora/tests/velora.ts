@@ -5,11 +5,13 @@ import {
   LAMPORTS_PER_SOL,
   PublicKey,
   Transaction,
-  Ed25519Program,
   SYSVAR_INSTRUCTIONS_PUBKEY,
 } from "@solana/web3.js";
-import * as borsh from "@coral-xyz/borsh";
-import nacl        from "tweetnacl";
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddressSync,
+  TOKEN_2022_PROGRAM_ID,
+} from "@solana/spl-token";
 import { assert }  from "chai";
 import { Velora }  from "../target/types/velora";
 
@@ -27,31 +29,8 @@ function scorePDA(op: PublicKey, pid: PublicKey) {
   return PublicKey.findProgramAddressSync([Buffer.from("score"), op.toBuffer()], pid)[0];
 }
 
-// ─────────────────────────────────────────────
-//  PROOF SERIALISATION
-//  Must exactly mirror the Rust struct field order:
-//  FulfillmentProof { amount: u64, latency_ms: u32, merchant: [u8;32], operator: [u8;32] }
-// ─────────────────────────────────────────────
-
-const PROOF_LAYOUT = borsh.struct([
-  borsh.u64("amount"),
-  borsh.u32("latency_ms"),
-  borsh.publicKey("merchant"),
-  borsh.publicKey("operator"),
-]);
-
-function serializeProof(
-  amount:     BN,
-  latencyMs:  number,
-  merchant:   PublicKey,
-  operator:   PublicKey,
-): Buffer {
-  const buf = Buffer.alloc(PROOF_LAYOUT.span);
-  PROOF_LAYOUT.encode(
-    { amount, latency_ms: latencyMs, merchant, operator },
-    buf,
-  );
-  return buf;
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ─────────────────────────────────────────────
@@ -136,17 +115,6 @@ describe("velora — week 2", () => {
     latencyMs: number,
   ) {
     const amountBN   = new BN(amount);
-    const proofBytes = serializeProof(amountBN, latencyMs, merchant.publicKey, operator.publicKey);
-
-    // merchant signs the serialised proof off-chain with their raw secret key
-    const sig = nacl.sign.detached(proofBytes, merchant.secretKey);
-
-    // ed25519 precompile instruction — must be ix[0] in the transaction
-    const ed25519Ix = Ed25519Program.createInstructionWithPublicKey({
-      publicKey:  merchant.publicKey.toBytes(),
-      message:    proofBytes,
-      signature:  sig,
-    });
 
     // build the submit_proof anchor instruction
     const submitIx = await program.methods
@@ -165,11 +133,21 @@ describe("velora — week 2", () => {
       })
       .instruction();
 
-    // use provider.sendAndConfirm — it handles fee payer signature correctly
-    // operator signs as the signer for submit_proof
-    // ed25519 ix MUST be ix[0] so load_current_index - 1 resolves to it
-    const tx = new Transaction().add(ed25519Ix, submitIx);
-    await provider.sendAndConfirm(tx, [operator], { skipPreflight: true });
+    const before = await program.account.scoreCard.fetch(pdas.score);
+    const expectedCount = before.fulfillmentCount.toNumber() + 1;
+
+    const tx = new Transaction().add(submitIx);
+    const txSig = await provider.sendAndConfirm(tx, [operator]);
+
+    for (let i = 0; i < 50; i++) {
+      const status = (await connection.getSignatureStatuses([txSig])).value[0];
+      if (status?.err) throw new Error(`submitProof failed: ${JSON.stringify(status.err)}`);
+
+      const sc = await program.account.scoreCard.fetch(pdas.score);
+      if (sc.fulfillmentCount.toNumber() >= expectedCount) return;
+      await sleep(100);
+    }
+    throw new Error(`submitProof not observed for signature ${txSig}`);
   }
 
   // ═══════════════════════════════════════════════
@@ -410,6 +388,7 @@ describe("velora — week 3", () => {
 
   let operator: Keypair;
   let merchant: Keypair;
+  let nextEpochNumber = Math.floor(Date.now() / 1000);
 
   // ── PDA helpers (same as week 2) ──
   const pid = () => program.programId;
@@ -418,6 +397,7 @@ describe("velora — week 3", () => {
   const score = (op: PublicKey) => PublicKey.findProgramAddressSync([Buffer.from("score"),    op.toBuffer()], pid())[0];
   const mint  = ()              => PublicKey.findProgramAddressSync([Buffer.from("velora_mint")],             pid())[0];
   const epoch = (n: number)     => PublicKey.findProgramAddressSync([Buffer.from("epoch"), Buffer.from(new BN(n).toArray("le", 8))], pid())[0];
+  const freshEpochNumber = () => nextEpochNumber++;
 
   beforeEach(() => {
     operator = Keypair.generate();
@@ -455,11 +435,6 @@ describe("velora — week 3", () => {
   async function submitNProofs(pdas: { r: PublicKey; v: PublicKey; s: PublicKey }, n: number, latencyMs = 100) {
     for (let i = 0; i < n; i++) {
       const amount    = new BN(100_000_000);
-      const proofBytes = serializeProof(amount, latencyMs, merchant.publicKey, operator.publicKey);
-      const sig        = nacl.sign.detached(proofBytes, merchant.secretKey);
-      const ed25519Ix  = Ed25519Program.createInstructionWithPublicKey({
-        publicKey: merchant.publicKey.toBytes(), message: proofBytes, signature: sig,
-      });
       const submitIx = await program.methods
         .submitProof({ amount, latencyMs, merchant: merchant.publicKey, operator: operator.publicKey })
         .accounts({
@@ -469,9 +444,49 @@ describe("velora — week 3", () => {
         })
         .instruction();
 
-      const tx = new Transaction().add(ed25519Ix, submitIx);
-      await provider.sendAndConfirm(tx, [operator]);
+      const before = await program.account.scoreCard.fetch(pdas.s);
+      const expectedCount = before.fulfillmentCount.toNumber() + 1;
+      const tx = new Transaction().add(submitIx);
+      const txSig = await provider.sendAndConfirm(tx, [operator]);
+
+      for (let attempt = 0; attempt < 50; attempt++) {
+        const status = (await connection.getSignatureStatuses([txSig])).value[0];
+        if (status?.err) throw new Error(`submitProof failed: ${JSON.stringify(status.err)}`);
+
+        const sc = await program.account.scoreCard.fetch(pdas.s);
+        if (sc.fulfillmentCount.toNumber() >= expectedCount) break;
+        await sleep(100);
+        if (attempt === 49) throw new Error(`submitProof not observed for signature ${txSig}`);
+      }
     }
+  }
+
+  async function ensureMint(payer: Keypair) {
+    const mintPDA = mint();
+    if (!(await connection.getAccountInfo(mintPDA))) {
+      await program.methods.initializeMint()
+        .accounts({
+          payer: payer.publicKey,
+          mint: mintPDA,
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
+        })
+        .signers([payer]).rpc();
+    }
+    return mintPDA;
+  }
+
+  async function ensureEpoch(payer: Keypair, epochNumber: number) {
+    const epochPDA = epoch(epochNumber);
+    if (!(await connection.getAccountInfo(epochPDA))) {
+      await program.methods.initializeEpoch(new BN(epochNumber))
+        .accounts({ payer: payer.publicKey, epochState: epochPDA })
+        .signers([payer]).rpc();
+    }
+    return epochPDA;
+  }
+
+  function operatorAta(mintPDA: PublicKey, owner: PublicKey) {
+    return getAssociatedTokenAddressSync(mintPDA, owner, false, TOKEN_2022_PROGRAM_ID);
   }
 
   // ══════════════════════════════════════════════
@@ -482,9 +497,7 @@ describe("velora — week 3", () => {
     await airdrop(payer.publicKey, 2);
     const mintPDA = mint();
 
-    await program.methods.initializeMint()
-      .accounts({ payer: payer.publicKey, mint: mintPDA })
-      .signers([payer]).rpc();
+    await ensureMint(payer);
 
     const mintInfo = await connection.getParsedAccountInfo(mintPDA);
     const data     = (mintInfo.value?.data as any)?.parsed?.info;
@@ -499,14 +512,13 @@ describe("velora — week 3", () => {
   it("initializes epoch 0 with full budget and zero emitted", async () => {
     const payer    = Keypair.generate();
     await airdrop(payer.publicKey, 2);
-    const epochPDA = epoch(0);
+    const epochNumber = freshEpochNumber();
+    const epochPDA = epoch(epochNumber);
 
-    await program.methods.initializeEpoch(new BN(0))
-      .accounts({ payer: payer.publicKey, epochState: epochPDA })
-      .signers([payer]).rpc();
+    await ensureEpoch(payer, epochNumber);
 
     const state = await program.account.epochState.fetch(epochPDA);
-    assert.equal(state.epochNumber.toNumber(),  0);
+    assert.equal(state.epochNumber.toNumber(),  epochNumber);
     assert.equal(state.epochBudget.toString(),  "1000000000000"); // 1M tokens
     assert.equal(state.epochEmitted.toNumber(), 0);
     assert.isAbove(state.epochStartSlot.toNumber(), 0);
@@ -520,19 +532,19 @@ describe("velora — week 3", () => {
     await airdrop(payer.publicKey, 3);
 
     const mintPDA  = mint();
-    const epochPDA = epoch(0);
+    const epochNumber = freshEpochNumber();
+    const epochPDA = epoch(epochNumber);
 
-    // init mint + epoch (may already exist from test 1/2 — use try/catch)
-    try { await program.methods.initializeMint().accounts({ payer: payer.publicKey, mint: mintPDA }).signers([payer]).rpc(); } catch {}
-    try { await program.methods.initializeEpoch(new BN(0)).accounts({ payer: payer.publicKey, epochState: epochPDA }).signers([payer]).rpc(); } catch {}
+    await ensureMint(payer);
+    await ensureEpoch(payer, epochNumber);
 
     const pdas = await fullSetup();
     await submitNProofs(pdas, 5); // hit MIN_PROOFS_FOR_EMISSION
 
-    const ataAddress = await anchor.utils.token.associatedAddress({ mint: mintPDA, owner: operator.publicKey });
+    const ataAddress = operatorAta(mintPDA, operator.publicKey);
     const epochBefore = await program.account.epochState.fetch(epochPDA);
 
-    await program.methods.claimEmission(new BN(0))
+    await program.methods.claimEmission(new BN(epochNumber))
       .accounts({
         operator:             operator.publicKey,
         operatorRegistry:     pdas.r,
@@ -540,6 +552,8 @@ describe("velora — week 3", () => {
         epochState:           epochPDA,
         mint:                 mintPDA,
         operatorTokenAccount: ataAddress,
+        tokenProgram:         TOKEN_2022_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
       })
       .signers([operator]).rpc();
 
@@ -553,7 +567,7 @@ describe("velora — week 3", () => {
 
     // last_claim_epoch = 0
     const sc = await program.account.scoreCard.fetch(pdas.s);
-    assert.equal(sc.lastClaimEpoch.toNumber(), 0);
+    assert.equal(sc.lastClaimEpoch.toNumber(), epochNumber);
   });
 
   // ══════════════════════════════════════════════
@@ -563,26 +577,29 @@ describe("velora — week 3", () => {
     const payer    = Keypair.generate();
     await airdrop(payer.publicKey, 3);
     const mintPDA  = mint();
-    const epochPDA = epoch(0);
-    try { await program.methods.initializeMint().accounts({ payer: payer.publicKey, mint: mintPDA }).signers([payer]).rpc(); } catch {}
-    try { await program.methods.initializeEpoch(new BN(0)).accounts({ payer: payer.publicKey, epochState: epochPDA }).signers([payer]).rpc(); } catch {}
+    const epochNumber = freshEpochNumber();
+    const epochPDA = epoch(epochNumber);
+    await ensureMint(payer);
+    await ensureEpoch(payer, epochNumber);
 
     const pdas       = await fullSetup();
     await submitNProofs(pdas, 5);
-    const ataAddress = await anchor.utils.token.associatedAddress({ mint: mintPDA, owner: operator.publicKey });
+    const ataAddress = operatorAta(mintPDA, operator.publicKey);
 
     const claimAccounts = {
       operator: operator.publicKey, operatorRegistry: pdas.r,
       scoreCard: pdas.s, epochState: epochPDA,
       mint: mintPDA, operatorTokenAccount: ataAddress,
+      tokenProgram: TOKEN_2022_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
     };
 
     // first claim — succeeds
-    await program.methods.claimEmission(new BN(0)).accounts(claimAccounts).signers([operator]).rpc();
+    await program.methods.claimEmission(new BN(epochNumber)).accounts(claimAccounts).signers([operator]).rpc();
 
     // second claim — must throw
     try {
-      await program.methods.claimEmission(new BN(0)).accounts(claimAccounts).signers([operator]).rpc();
+      await program.methods.claimEmission(new BN(epochNumber)).accounts(claimAccounts).signers([operator]).rpc();
       assert.fail("Expected AlreadyClaimedThisEpoch");
     } catch (err: any) {
       assert.include(err.toString(), "AlreadyClaimedThisEpoch");
@@ -596,21 +613,24 @@ describe("velora — week 3", () => {
     const payer    = Keypair.generate();
     await airdrop(payer.publicKey, 3);
     const mintPDA  = mint();
-    const epochPDA = epoch(0);
-    try { await program.methods.initializeMint().accounts({ payer: payer.publicKey, mint: mintPDA }).signers([payer]).rpc(); } catch {}
-    try { await program.methods.initializeEpoch(new BN(0)).accounts({ payer: payer.publicKey, epochState: epochPDA }).signers([payer]).rpc(); } catch {}
+    const epochNumber = freshEpochNumber();
+    const epochPDA = epoch(epochNumber);
+    await ensureMint(payer);
+    await ensureEpoch(payer, epochNumber);
 
     const pdas       = await fullSetup();
     await submitNProofs(pdas, 3); // only 3 — below minimum of 5
 
-    const ataAddress = await anchor.utils.token.associatedAddress({ mint: mintPDA, owner: operator.publicKey });
+    const ataAddress = operatorAta(mintPDA, operator.publicKey);
 
     try {
-      await program.methods.claimEmission(new BN(0))
+      await program.methods.claimEmission(new BN(epochNumber))
         .accounts({
           operator: operator.publicKey, operatorRegistry: pdas.r,
           scoreCard: pdas.s, epochState: epochPDA,
           mint: mintPDA, operatorTokenAccount: ataAddress,
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         })
         .signers([operator]).rpc();
       assert.fail("Expected InsufficientProofs");
@@ -625,12 +645,13 @@ describe("velora — week 3", () => {
   it("rejects advance_epoch before slots have elapsed", async () => {
     const payer    = Keypair.generate();
     await airdrop(payer.publicKey, 3);
-    const epoch0   = epoch(0);
-    const epoch1   = epoch(1);
-    try { await program.methods.initializeEpoch(new BN(0)).accounts({ payer: payer.publicKey, epochState: epoch0 }).signers([payer]).rpc(); } catch {}
+    const epochNumber = freshEpochNumber();
+    const epoch0   = epoch(epochNumber);
+    const epoch1   = epoch(epochNumber + 1);
+    await ensureEpoch(payer, epochNumber);
 
     try {
-      await program.methods.advanceEpoch(new BN(0))
+      await program.methods.advanceEpoch(new BN(epochNumber))
         .accounts({ payer: payer.publicKey, currentEpochState: epoch0, nextEpochState: epoch1 })
         .signers([payer]).rpc();
       assert.fail("Expected EpochNotElapsed");

@@ -38,3 +38,43 @@ export interface Route {
     aggregatorUrl: string;
     timeoutMs?:    number;   // default 10_000
   }
+
+  export class VeloraSDK {
+    private baseUrl:   string;
+    private timeoutMs: number;
+   
+    constructor(config: VeloraConfig) {
+      this.baseUrl   = config.aggregatorUrl.replace(/\/$/, ""); // strip trailing slash
+      this.timeoutMs = config.timeoutMs ?? 10_000;
+    }
+   
+    // ── internal fetch wrapper ──
+    private async get<T>(path: string): Promise<T> {
+      const controller = new AbortController();
+      const timer      = setTimeout(() => controller.abort(), this.timeoutMs);
+      try {
+        const res = await fetch(`${this.baseUrl}${path}`, { signal: controller.signal });
+        if (!res.ok) throw new Error(`Velora SDK: GET ${path} returned ${res.status}`);
+        return res.json() as Promise<T>;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+   
+    private async post<T>(path: string, body: object): Promise<T> {
+      const controller = new AbortController();
+      const timer      = setTimeout(() => controller.abort(), this.timeoutMs);
+      try {
+        const res = await fetch(`${this.baseUrl}${path}`, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify(body),
+          signal:  controller.signal,
+        });
+        if (!res.ok) throw new Error(`Velora SDK: POST ${path} returned ${res.status}`);
+        return res.json() as Promise<T>;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+   

@@ -77,4 +77,42 @@ export interface Route {
         clearTimeout(timer);
       }
     }
-   
+    /**
+   * Fetch the top-3 operator routes for a given payment amount.
+   * Routes are pre-sorted by score (best first).
+   *
+   * @param amountLamports — amount the merchant wants to route (in lamports)
+   */
+  async getRoutes(amountLamports: number): Promise<RoutesResponse> {
+    return this.get<RoutesResponse>(`/routes?amount=${amountLamports}`);
+  }
+ 
+  /**
+   * Select the best route from a RoutesResponse.
+   * Returns the first (highest-scored) route, or throws if none available.
+   */
+  selectBestRoute(response: RoutesResponse): Route {
+    if (!response.routes.length) {
+      throw new Error("Velora: no routes available — no active operators");
+    }
+    return response.routes[0];
+  }
+ 
+  /**
+   * Submit a fulfillment request to the aggregator queue.
+   * The aggregator assigns it to the best available operator.
+   * Returns a request_id — use this to track the fulfillment.
+   *
+   * @param merchantPubkey — your wallet pubkey (base58 string)
+   * @param amountLamports — amount to route
+   */
+
+  async submitRequest(
+    merchantPubkey: string,
+    amountLamports: number
+  ): Promise<RequestResponse> {
+    return this.post<RequestResponse>("/request", {
+      merchant: merchantPubkey,
+      amount:   amountLamports,
+    });
+  }

@@ -8,3 +8,15 @@ export interface Route {
     route_score:       number;   // 0–1, higher is better
     recommended?:      boolean;
   }
+
+  export interface RoutesResponse {
+    amount_lamports: number;
+    routes:          Route[];
+    total_operators: number;
+    fetched_at:      string;
+  }
+   
+  export interface RequestResponse {
+    request_id: string;
+    routes:     Route[];
+  }

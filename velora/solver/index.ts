@@ -1,6 +1,6 @@
 
 import * as anchor from "@coral-xyz/anchor";
-import { Program, BN } from "@coral-xyz/anchor";
+import { BN } from "@coral-xyz/anchor";
 import {
   Connection,
   Keypair,
@@ -14,10 +14,9 @@ import * as borsh  from "@coral-xyz/borsh";
 import nacl        from "tweetnacl";
 import fs          from "fs";
 import path        from "path";
-import { Velora }  from "../target/types/velora";
 import IDL         from "../target/idl/velora.json";
 const AGGREGATOR_URL  = process.env.AGGREGATOR_URL ?? "http://localhost:3001";
-const PROGRAM_ID      = new PublicKey(process.env.PROGRAM_ID ?? "YOUR_PROGRAM_ID_HERE");
+const PROGRAM_ID      = new PublicKey(process.env.PROGRAM_ID ?? (IDL as any).address);
 const CLUSTER         = (process.env.CLUSTER ?? "devnet") as anchor.web3.Cluster;
 const POLL_INTERVAL   = Number(process.env.POLL_INTERVAL ?? 2000); // ms
 const KEYPAIR_PATH    = process.env.OPERATOR_KEYPAIR
@@ -47,11 +46,10 @@ const provider = new anchor.AnchorProvider(connection, wallet, {
   commitment: "confirmed",
 });
 
-const program = new Program(
-  IDL as anchor.Idl,
-  PROGRAM_ID,
+const program = new anchor.Program(
+  { ...(IDL as anchor.Idl), address: PROGRAM_ID.toBase58() },
   provider
-) as Program<Velora>;
+) as any;
 
 // ─────────────────────────────────────────────
 //  PDA HELPERS
@@ -108,20 +106,20 @@ function serializeProof(
 //  HTTP HELPERS
 // ─────────────────────────────────────────────
 
-async function httpGet(url: string) {
+async function httpGet<T = any>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`GET ${url} → ${res.status}`);
-  return res.json();
+  return res.json() as Promise<T>;
 }
 
-async function httpPost(url: string, body: object) {
+async function httpPost<T = any>(url: string, body: object): Promise<T> {
   const res = await fetch(url, {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
     body:    JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`POST ${url} → ${res.status}: ${await res.text()}`);
-  return res.json();
+  return res.json() as Promise<T>;
 }
 
 // ─────────────────────────────────────────────

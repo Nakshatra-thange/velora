@@ -2,7 +2,7 @@
  // Run: npx ts-node scripts/demo.ts
  
 import * as anchor from "@coral-xyz/anchor";
-import { Program, BN }  from "@coral-xyz/anchor";
+import { BN }  from "@coral-xyz/anchor";
 import {
   Keypair, LAMPORTS_PER_SOL, PublicKey,
   Transaction, Ed25519Program, SYSVAR_INSTRUCTIONS_PUBKEY,
@@ -10,10 +10,9 @@ import {
 } from "@solana/web3.js";
 import * as borsh from "@coral-xyz/borsh";
 import nacl       from "tweetnacl";
-import { Velora } from "../target/types/velora";
 import IDL        from "../target/idl/velora.json";
 
-const PROGRAM_ID = new PublicKey("EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV");
+const PROGRAM_ID = new PublicKey(process.env.PROGRAM_ID ?? (IDL as any).address);
 
 // ── PDAs ──────────────────────────────────────
 const pda = (seeds: Buffer[]) =>
@@ -53,7 +52,10 @@ async function main() {
   const wallet     = anchor.Wallet.local(); // reads ~/.config/solana/id.json
   const provider   = new anchor.AnchorProvider(connection, wallet, { commitment: "confirmed" });
   anchor.setProvider(provider);
-  const program    = new Program(IDL as anchor.Idl, PROGRAM_ID, provider) as Program<Velora>;
+  const program    = new anchor.Program(
+    { ...(IDL as anchor.Idl), address: PROGRAM_ID.toBase58() },
+    provider
+  ) as any;
 
   const operator = Keypair.generate();
   const merchant = Keypair.generate();

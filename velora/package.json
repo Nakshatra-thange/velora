@@ -1,17 +1,27 @@
 {
+  "name": "velora",
   "license": "ISC",
   "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "typecheck": "tsc --noEmit",
+    "aggregator": "ts-node aggregator/index.ts",
+    "solver": "ts-node solver/index.ts",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
   },
   "dependencies": {
-    "@anchor-lang/core": "^0.32.1",
     "@types/express": "^5.0.6",
-    "@types/uuid": "^10.0.0",
     "express": "^5.2.1",
-    "uuid": "^14.0.0"
+    "lucide-react": "^1.16.0",
+    "next": "^14.2.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.4",
     "@types/bn.js": "^5.1.0",
     "@types/chai": "^4.3.0",
     "@types/mocha": "^9.0.0",
@@ -20,6 +30,8 @@
     "prettier": "^2.6.2",
     "solana-bankrun": "^0.4.0",
     "ts-mocha": "^10.0.0",
+    "ts-node": "^10.9.2",
+    "tweetnacl": "^1.0.3",
     "typescript": "^5.7.3"
   }
 }

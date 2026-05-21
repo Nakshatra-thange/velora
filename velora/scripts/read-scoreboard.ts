@@ -1,15 +1,13 @@
 
 
 import * as anchor from "@coral-xyz/anchor";
-import { Program }  from "@coral-xyz/anchor";
 import { clusterApiUrl, Connection, PublicKey } from "@solana/web3.js";
-import { Velora } from "../target/types/velora";
 import IDL         from "../target/idl/velora.json";
 
 // ─────────────────────────────────────────────
 //  CONFIG — paste your deployed program ID here
 // ─────────────────────────────────────────────
-const PROGRAM_ID   = new PublicKey("EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV");
+const PROGRAM_ID   = new PublicKey(process.env.PROGRAM_ID ?? (IDL as any).address);
 const CLUSTER      = "devnet";
 
 // ─────────────────────────────────────────────
@@ -56,7 +54,10 @@ async function main() {
     { commitment: "confirmed" }
   );
 
-  const program = new Program(IDL as anchor.Idl, PROGRAM_ID, provider) as Program<Velora>;
+  const program = new anchor.Program(
+    { ...(IDL as anchor.Idl), address: PROGRAM_ID.toBase58() },
+    provider
+  ) as any;
 
   console.log("\n🔍  Fetching all ScoreCard accounts from", CLUSTER, "...\n");
 

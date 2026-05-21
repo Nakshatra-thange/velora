@@ -49,7 +49,7 @@ async function confirm(connection: anchor.web3.Connection, sig: string) {
 describe("velora — week 2", () => {
   const provider   = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
-  const program    = anchor.workspace.Velora as Program<Velora>;
+  const program    = anchor.workspace.Velora as any;
   const connection = provider.connection;
 
   // fresh keypairs per test — no shared state bleeds between tests
@@ -383,7 +383,7 @@ describe("velora — week 2", () => {
 describe("velora — week 3", () => {
   const provider   = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
-  const program    = anchor.workspace.Velora as Program<Velora>;
+  const program    = anchor.workspace.Velora as any;
   const connection = provider.connection;
 
   let operator: Keypair;

@@ -2,18 +2,16 @@
 
 import express, { Request, Response } from "express";
 import * as anchor from "@coral-xyz/anchor";
-import { Program }  from "@coral-xyz/anchor";
 import { PublicKey, Connection, clusterApiUrl } from "@solana/web3.js";
-import { Velora } from "../target/types/velora";
 import IDL         from "../target/idl/velora.json";
-import { v4 as uuid } from "uuid";
+import { randomUUID } from "crypto";
 
 // ─────────────────────────────────────────────
 //  CONFIG
 // ─────────────────────────────────────────────
 
 const PORT       = process.env.PORT || 3001;
-const PROGRAM_ID = new PublicKey(process.env.PROGRAM_ID ?? "YOUR_PROGRAM_ID_HERE");
+const PROGRAM_ID = new PublicKey(process.env.PROGRAM_ID ?? (IDL as any).address);
 const CLUSTER    = (process.env.CLUSTER ?? "devnet") as anchor.web3.Cluster;
 const SCALE      = 1_000_000;
 
@@ -33,11 +31,10 @@ const provider = new anchor.AnchorProvider(
   { commitment: "confirmed" }
 );
 
-const program = new Program(
-  IDL as anchor.Idl,
-  PROGRAM_ID,
+const program = new anchor.Program(
+  { ...(IDL as anchor.Idl), address: PROGRAM_ID.toBase58() },
   provider
-) as Program<Velora>;
+) as any;
 
 // ─────────────────────────────────────────────
 //  IN-MEMORY PENDING REQUEST QUEUE
@@ -134,6 +131,8 @@ app.use(express.json());
 app.use((_req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  if (_req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
 
@@ -237,7 +236,7 @@ app.post("/request", async (req: Request, res: Response) => {
       .slice(0, 3);
 
     const request: PendingRequest = {
-      id:         uuid(),
+      id:         randomUUID(),
       merchant,
       amount:     Number(amount),
       created_at: Date.now(),
@@ -256,6 +255,26 @@ app.post("/request", async (req: Request, res: Response) => {
     console.error("[/request]", err.message);
     return res.status(500).json({ error: err.message });
   }
+});
+
+// ────────────────────────────────────────────
+//  GET /request/:id
+//
+//  Merchant SDK polls this to confirm fulfillment.
+// ────────────────────────────────────────────
+app.get("/request/:id", (req: Request, res: Response) => {
+  const requestId = String(req.params.id);
+  const request = queue.get(requestId);
+
+  if (!request) {
+    return res.status(404).json({ error: "Request not found" });
+  }
+
+  return res.json({
+    request_id: request.id,
+    fulfilled: request.fulfilled,
+    request,
+  });
 });
 
 // ────────────────────────────────────────────
@@ -372,7 +391,7 @@ app.get("/health", (_req, res) => {
 //  START
 // ─────────────────────────────────────────────
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`\n🚀  Velora aggregator running on http://localhost:${PORT}`);
   console.log(`    cluster:    ${CLUSTER}`);
   console.log(`    program_id: ${PROGRAM_ID.toBase58()}`);
@@ -385,3 +404,13 @@ app.listen(PORT, () => {
   console.log(`      POST /fulfill                   — solver reports completion`);
   console.log(`      GET  /health                    — uptime + stats\n`);
 });
+
+const keepAlive = setInterval(() => undefined, 1 << 30);
+
+function shutdown() {
+  clearInterval(keepAlive);
+  server.close(() => process.exit(0));
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);

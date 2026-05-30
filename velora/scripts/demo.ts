@@ -8,11 +8,29 @@ import {
   Transaction, Ed25519Program, SYSVAR_INSTRUCTIONS_PUBKEY,
   clusterApiUrl, Connection,
 } from "@solana/web3.js";
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddressSync,
+  TOKEN_2022_PROGRAM_ID,
+} from "@solana/spl-token";
 import * as borsh from "@coral-xyz/borsh";
 import nacl       from "tweetnacl";
 import IDL        from "../target/idl/velora.json";
+import fs from "fs";
+import path from "path";
 
-const PROGRAM_ID = new PublicKey(process.env.PROGRAM_ID ?? (IDL as any).address);
+const PROGRAM_ID_TEXT = process.env.PROGRAM_ID ?? (IDL as any).address;
+
+if (!PROGRAM_ID_TEXT || PROGRAM_ID_TEXT === "YOUR_REAL_ID" || PROGRAM_ID_TEXT.includes("YOUR_")) {
+  throw new Error(
+    "Set PROGRAM_ID to your deployed Velora program id, e.g. PROGRAM_ID=EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV npx ts-node scripts/demo.ts"
+  );
+}
+
+const PROGRAM_ID = new PublicKey(PROGRAM_ID_TEXT);
+const DEMO_BOND_LAMPORTS = 1 * LAMPORTS_PER_SOL;
+const DEMO_TARGET_BALANCE = 2 * LAMPORTS_PER_SOL;
+const DEMO_EPOCH_NUMBER = Number(process.env.EPOCH_NUMBER ?? Math.floor(Date.now() / 1000));
 
 // ── PDAs ──────────────────────────────────────
 const pda = (seeds: Buffer[]) =>
@@ -39,6 +57,48 @@ async function confirm(connection: Connection, sig: string) {
   await connection.confirmTransaction({ signature: sig, ...(await connection.getLatestBlockhash()) });
 }
 
+async function fundToTargetBalance(connection: Connection, pubkey: PublicKey, targetLamports: number) {
+  let balance = await connection.getBalance(pubkey);
+  let lastError: unknown;
+
+  while (balance < targetLamports) {
+    const remaining = targetLamports - balance;
+    const chunks = [
+      Math.min(1 * LAMPORTS_PER_SOL, remaining),
+      Math.min(0.5 * LAMPORTS_PER_SOL, remaining),
+      Math.min(0.25 * LAMPORTS_PER_SOL, remaining),
+    ].filter((chunk) => chunk > 0);
+
+    let funded = false;
+    for (const chunk of chunks) {
+      try {
+        const sig = await connection.requestAirdrop(pubkey, chunk);
+        await confirm(connection, sig);
+        balance = await connection.getBalance(pubkey);
+        funded = true;
+        break;
+      } catch (err) {
+        lastError = err;
+        await new Promise((resolve) => setTimeout(resolve, 1_500));
+      }
+    }
+
+    if (!funded) break;
+  }
+
+  if (balance < targetLamports) throw lastError ?? new Error("Unable to fund operator");
+}
+
+function loadOperatorKeypair() {
+  const defaultKeypairPath = path.join(process.env.HOME ?? "", ".config/solana/id.json");
+  const keypairPath = process.env.OPERATOR_KEYPAIR
+    ?? (fs.existsSync(defaultKeypairPath) ? defaultKeypairPath : undefined);
+  if (!keypairPath) return Keypair.generate();
+
+  const raw = JSON.parse(fs.readFileSync(path.resolve(keypairPath), "utf-8"));
+  return Keypair.fromSecretKey(Uint8Array.from(raw));
+}
+
 function log(step: string, msg: string) {
   console.log(`\n[${step}] ${msg}`);
 }
@@ -49,7 +109,9 @@ function log(step: string, msg: string) {
 
 async function main() {
   const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
-  const wallet     = anchor.Wallet.local(); // reads ~/.config/solana/id.json
+  const operator = loadOperatorKeypair();
+  const merchant = Keypair.generate();
+  const wallet     = new anchor.Wallet(operator);
   const provider   = new anchor.AnchorProvider(connection, wallet, { commitment: "confirmed" });
   anchor.setProvider(provider);
   const program    = new anchor.Program(
@@ -57,17 +119,23 @@ async function main() {
     provider
   ) as any;
 
-  const operator = Keypair.generate();
-  const merchant = Keypair.generate();
-
   console.log("\n🚀  Velora end-to-end demo on devnet");
   console.log("────────────────────────────────────");
   console.log("operator:", operator.publicKey.toBase58());
   console.log("merchant:", merchant.publicKey.toBase58());
 
   // ── Step 1: airdrop ──────────────────────────
-  log("1/8", "Airdropping SOL to operator...");
-  await confirm(connection, await connection.requestAirdrop(operator.publicKey, 5 * LAMPORTS_PER_SOL));
+  log("1/8", "Funding operator...");
+  const startingBalance = await connection.getBalance(operator.publicKey);
+  if (startingBalance < DEMO_TARGET_BALANCE) {
+    try {
+      await fundToTargetBalance(connection, operator.publicKey, DEMO_TARGET_BALANCE);
+    } catch (err) {
+      throw new Error(
+        `Devnet faucet failed before the demo could start. Retry later, or run with a funded keypair: OPERATOR_KEYPAIR=/path/to/keypair.json PROGRAM_ID=${PROGRAM_ID.toBase58()} npx ts-node scripts/demo.ts\nOriginal error: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
   console.log("    balance:", (await connection.getBalance(operator.publicKey)) / LAMPORTS_PER_SOL, "SOL");
 
   // ── Step 2: register operator ────────────────
@@ -78,8 +146,8 @@ async function main() {
   console.log("    OperatorRegistry PDA:", regPDA(operator.publicKey).toBase58());
 
   // ── Step 3: deposit bond ─────────────────────
-  log("3/8", "Depositing 2 SOL bond into EscrowVault...");
-  await program.methods.depositBond(new BN(2 * LAMPORTS_PER_SOL))
+  log("3/8", "Depositing 1 SOL bond into EscrowVault...");
+  await program.methods.depositBond(new BN(DEMO_BOND_LAMPORTS))
     .accounts({ operator: operator.publicKey, escrowVault: vaultPDA(operator.publicKey) })
     .signers([operator]).rpc();
   const vaultAcc = await program.account.escrowVault.fetch(vaultPDA(operator.publicKey));
@@ -100,7 +168,11 @@ async function main() {
   log("5/8", "Initializing global mint and epoch 0...");
   try {
     await program.methods.initializeMint()
-      .accounts({ payer: operator.publicKey, mint: mintPDA() })
+      .accounts({
+        payer: operator.publicKey,
+        mint: mintPDA(),
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+      })
       .signers([operator]).rpc();
     console.log("    mint PDA:", mintPDA().toBase58());
   } catch { console.log("    mint already exists — skipping"); }
@@ -146,12 +218,19 @@ async function main() {
 
   // ── Step 7: claim emission ────────────────────
   log("7/8", "Claiming token emission for epoch 0...");
-  const ataAddress = await anchor.utils.token.associatedAddress({ mint: mintPDA(), owner: operator.publicKey });
+  const ataAddress = getAssociatedTokenAddressSync(
+    mintPDA(),
+    operator.publicKey,
+    false,
+    TOKEN_2022_PROGRAM_ID
+  );
   await program.methods.claimEmission(new BN(0))
     .accounts({
       operator: operator.publicKey, operatorRegistry: regPDA(operator.publicKey),
       scoreCard: scorePDA(operator.publicKey), epochState: epochPDA(0),
       mint: mintPDA(), operatorTokenAccount: ataAddress,
+      tokenProgram: TOKEN_2022_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
     })
     .signers([operator]).rpc();
 

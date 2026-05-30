@@ -15,7 +15,7 @@
  */
 
 import * as anchor from "@coral-xyz/anchor";
-import { Program, BN } from "@coral-xyz/anchor";
+import { BN } from "@coral-xyz/anchor";
 import {
   Connection,
   Keypair,
@@ -26,6 +26,9 @@ import {
   clusterApiUrl,
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
+import {
+  TOKEN_2022_PROGRAM_ID,
+} from "@solana/spl-token";
 import * as borsh from "@coral-xyz/borsh";
 import nacl from "tweetnacl";
 import fs from "fs";
@@ -83,8 +86,11 @@ function makeProvider(signer: Keypair) {
   return new anchor.AnchorProvider(connection, wallet, { commitment: "confirmed" });
 }
 
-function makeProgram(signer: Keypair): Program {
-  return new Program(IDL, PROGRAM_ID, makeProvider(signer));
+function makeProgram(signer: Keypair) {
+  return new anchor.Program(
+    { ...(IDL as anchor.Idl), address: PROGRAM_ID.toBase58() },
+    makeProvider(signer)
+  ) as any;
 }
 
 // ─────────────────────────────────────────────
@@ -302,12 +308,14 @@ async function main() {
   // ── Step 1: initialize global mint (once, payer pays) ──
   console.log("── Step 1: initialize global mint");
   const payerProgram = makeProgram(PAYER_KEYPAIR);
-  const payerProvider = makeProvider(PAYER_KEYPAIR);
-
   try {
     await payerProgram.methods
       .initializeMint()
-      .accounts({ payer: PAYER_KEYPAIR.publicKey, mint: mintPDA() })
+      .accounts({
+        payer: PAYER_KEYPAIR.publicKey,
+        mint: mintPDA(),
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+      })
       .signers([PAYER_KEYPAIR])
       .rpc();
     console.log(`  ✅ mint created: ${mintPDA().toBase58()}`);

@@ -140,32 +140,50 @@ async function main() {
 
   // ── Step 2: register operator ────────────────
   log("2/8", "Registering operator (fee: 50bps = 0.5%)...");
-  await program.methods.registerOperator(50)
-    .accounts({ operator: operator.publicKey, operatorRegistry: regPDA(operator.publicKey), escrowVault: vaultPDA(operator.publicKey) })
-    .signers([operator]).rpc();
+  try {
+    await program.methods.registerOperator(50)
+      .accounts({ operator: operator.publicKey, operatorRegistry: regPDA(operator.publicKey), escrowVault: vaultPDA(operator.publicKey) })
+      .signers([operator]).rpc();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!message.includes("already in use")) throw err;
+    console.log("    already registered — continuing");
+  }
   console.log("    OperatorRegistry PDA:", regPDA(operator.publicKey).toBase58());
 
   // ── Step 3: deposit bond ─────────────────────
   log("3/8", "Depositing 1 SOL bond into EscrowVault...");
-  await program.methods.depositBond(new BN(DEMO_BOND_LAMPORTS))
-    .accounts({ operator: operator.publicKey, escrowVault: vaultPDA(operator.publicKey) })
-    .signers([operator]).rpc();
+  const vaultBefore = await program.account.escrowVault.fetch(vaultPDA(operator.publicKey));
+  const depositNeeded = Math.max(0, DEMO_BOND_LAMPORTS - vaultBefore.depositedLamports.toNumber());
+  if (depositNeeded > 0) {
+    await program.methods.depositBond(new BN(depositNeeded))
+      .accounts({ operator: operator.publicKey, escrowVault: vaultPDA(operator.publicKey) })
+      .signers([operator]).rpc();
+  } else {
+    console.log("    bond already funded — continuing");
+  }
   const vaultAcc = await program.account.escrowVault.fetch(vaultPDA(operator.publicKey));
   console.log("    vault balance:", vaultAcc.depositedLamports.toNumber() / LAMPORTS_PER_SOL, "SOL");
 
   // ── Step 4: initialize scorecard ─────────────
   log("4/8", "Initializing ScoreCard (EMA starts at 100%)...");
-  await program.methods.initializeScorecard()
-    .accounts({
-      operator: operator.publicKey, operatorRegistry: regPDA(operator.publicKey),
-      escrowVault: vaultPDA(operator.publicKey), scoreCard: scorePDA(operator.publicKey),
-    })
-    .signers([operator]).rpc();
+  try {
+    await program.methods.initializeScorecard()
+      .accounts({
+        operator: operator.publicKey, operatorRegistry: regPDA(operator.publicKey),
+        escrowVault: vaultPDA(operator.publicKey), scoreCard: scorePDA(operator.publicKey),
+      })
+      .signers([operator]).rpc();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!message.includes("already in use")) throw err;
+    console.log("    scorecard already exists — continuing");
+  }
   const sc0 = await program.account.scoreCard.fetch(scorePDA(operator.publicKey));
   console.log("    ema_reliability:", sc0.emaReliability.toNumber(), "/ 1_000_000");
 
   // ── Step 5: initialize mint + epoch ──────────
-  log("5/8", "Initializing global mint and epoch 0...");
+  log("5/8", `Initializing global mint and epoch ${DEMO_EPOCH_NUMBER}...`);
   try {
     await program.methods.initializeMint()
       .accounts({
@@ -178,11 +196,11 @@ async function main() {
   } catch { console.log("    mint already exists — skipping"); }
 
   try {
-    await program.methods.initializeEpoch(new BN(0))
-      .accounts({ payer: operator.publicKey, epochState: epochPDA(0) })
+    await program.methods.initializeEpoch(new BN(DEMO_EPOCH_NUMBER))
+      .accounts({ payer: operator.publicKey, epochState: epochPDA(DEMO_EPOCH_NUMBER) })
       .signers([operator]).rpc();
-    console.log("    epoch 0 PDA:", epochPDA(0).toBase58());
-  } catch { console.log("    epoch 0 already exists — skipping"); }
+    console.log(`    epoch ${DEMO_EPOCH_NUMBER} PDA:`, epochPDA(DEMO_EPOCH_NUMBER).toBase58());
+  } catch { console.log(`    epoch ${DEMO_EPOCH_NUMBER} already exists — skipping`); }
 
   // ── Step 6: submit 5 proofs ───────────────────
   log("6/8", "Submitting 5 fulfillment proofs (latency: 300ms each)...");
@@ -217,17 +235,17 @@ async function main() {
   console.log(`    total_volume:      ${scFinal.totalVolume.toNumber() / LAMPORTS_PER_SOL} SOL`);
 
   // ── Step 7: claim emission ────────────────────
-  log("7/8", "Claiming token emission for epoch 0...");
+  log("7/8", `Claiming token emission for epoch ${DEMO_EPOCH_NUMBER}...`);
   const ataAddress = getAssociatedTokenAddressSync(
     mintPDA(),
     operator.publicKey,
     false,
     TOKEN_2022_PROGRAM_ID
   );
-  await program.methods.claimEmission(new BN(0))
+  await program.methods.claimEmission(new BN(DEMO_EPOCH_NUMBER))
     .accounts({
       operator: operator.publicKey, operatorRegistry: regPDA(operator.publicKey),
-      scoreCard: scorePDA(operator.publicKey), epochState: epochPDA(0),
+      scoreCard: scorePDA(operator.publicKey), epochState: epochPDA(DEMO_EPOCH_NUMBER),
       mint: mintPDA(), operatorTokenAccount: ataAddress,
       tokenProgram: TOKEN_2022_PROGRAM_ID,
       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -237,7 +255,7 @@ async function main() {
   const ataInfo = await connection.getTokenAccountBalance(ataAddress);
   console.log("    tokens minted:", ataInfo.value.uiAmountString, "VLRA");
 
-  const epochFinal = await program.account.epochState.fetch(epochPDA(0));
+  const epochFinal = await program.account.epochState.fetch(epochPDA(DEMO_EPOCH_NUMBER));
   console.log("    epoch_emitted:", epochFinal.epochEmitted.toString(), "raw units");
 
   // ── Step 8: explorer links ────────────────────
@@ -246,6 +264,7 @@ async function main() {
   console.log(`    operator: https://explorer.solana.com/address/${regPDA(operator.publicKey)}?cluster=devnet`);
   console.log(`    scorecard: https://explorer.solana.com/address/${scorePDA(operator.publicKey)}?cluster=devnet`);
   console.log(`    mint:     https://explorer.solana.com/address/${mintPDA()}?cluster=devnet`);
+  console.log(`    epoch:    https://explorer.solana.com/address/${epochPDA(DEMO_EPOCH_NUMBER)}?cluster=devnet`);
   console.log("\n✅  Full proof-of-facilitation loop complete.\n");
 }
 

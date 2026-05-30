@@ -3,17 +3,16 @@
   "license": "ISC",
   "scripts": {
     "dev": "next dev",
-    "start": "npx dist/aggregator/index.js",
+    "start": "npx ts-node aggregator/index.ts",
     "build": "next build",
     "typecheck": "tsc --noEmit",
     "aggregator": "ts-node aggregator/index.ts",
     "solver": "ts-node solver/index.ts",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
-    
-  "build:aggregator": "tsc aggregator/index.ts --outDir dist --esModuleInterop --resolveJsonModule --skipLibCheck",
-  "start:aggregator": "node dist/aggregator/index.js"
-},
+    "build:aggregator": "tsc aggregator/index.ts --outDir dist --esModuleInterop --resolveJsonModule --skipLibCheck",
+    "start:aggregator": "node dist/aggregator/index.js"
+  },
   "dependencies": {
     "@types/express": "^5.0.6",
     "express": "^5.2.1",
@@ -36,6 +35,6 @@
     "ts-mocha": "^10.0.0",
     "ts-node": "^10.9.2",
     "tweetnacl": "^1.0.3",
-    "typescript": "^5.7.3"
+    "typescript": "^5.9.3"
   }
 }

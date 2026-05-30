@@ -8,8 +8,11 @@
     "aggregator": "ts-node aggregator/index.ts",
     "solver": "ts-node solver/index.ts",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
-    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
-  },
+    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
+    
+  "build:aggregator": "tsc aggregator/index.ts --outDir dist --esModuleInterop --resolveJsonModule --skipLibCheck",
+  "start:aggregator": "node dist/aggregator/index.js"
+},
   "dependencies": {
     "@types/express": "^5.0.6",
     "express": "^5.2.1",

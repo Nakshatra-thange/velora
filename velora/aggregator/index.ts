@@ -3,7 +3,7 @@
 import express, { Request, Response } from "express";
 import * as anchor from "@coral-xyz/anchor";
 import { PublicKey, Connection, clusterApiUrl } from "@solana/web3.js";
-import IDL         from "../target/idl/velora.json";
+import IDL         from "../idl/velora.json";
 import { randomUUID } from "crypto";
 
 // ─────────────────────────────────────────────

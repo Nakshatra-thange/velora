@@ -1,0 +1,1378 @@
+{
+  "address": "EHHMy74EyjT2rAhMVMHEBm1N3TG349pJ4xstPX9uKjLV",
+  "metadata": {
+    "name": "velora",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "advance_epoch",
+      "discriminator": [
+        93,
+        138,
+        234,
+        218,
+        241,
+        230,
+        132,
+        38
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "current_epoch_state",
+          "docs": [
+            "The epoch that is being closed out — must have elapsed."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  112,
+                  111,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "current_epoch_number"
+              }
+            ]
+          }
+        },
+        {
+          "name": "next_epoch_state",
+          "docs": [
+            "The new epoch being initialised — must not exist yet."
+          ],
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "current_epoch_number",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "claim_emission",
+      "discriminator": [
+        253,
+        11,
+        218,
+        229,
+        113,
+        14,
+        176,
+        90
+      ],
+      "accounts": [
+        {
+          "name": "operator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "operator_registry",
+            "score_card"
+          ]
+        },
+        {
+          "name": "operator_registry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  112,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "score_card",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  99,
+                  111,
+                  114,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "epoch_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  112,
+                  111,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "epoch_number"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  101,
+                  108,
+                  111,
+                  114,
+                  97,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "operator_token_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "operator"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "epoch_number",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "deposit_bond",
+      "discriminator": [
+        120,
+        89,
+        18,
+        253,
+        112,
+        125,
+        87,
+        255
+      ],
+      "accounts": [
+        {
+          "name": "operator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "escrow_vault"
+          ]
+        },
+        {
+          "name": "escrow_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount_lamports",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "deregister_operator",
+      "discriminator": [
+        229,
+        98,
+        238,
+        100,
+        57,
+        56,
+        156,
+        124
+      ],
+      "accounts": [
+        {
+          "name": "operator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "operator_registry",
+            "escrow_vault"
+          ]
+        },
+        {
+          "name": "operator_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  112,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_epoch",
+      "discriminator": [
+        19,
+        114,
+        86,
+        107,
+        206,
+        21,
+        45,
+        39
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "epoch_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  112,
+                  111,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "epoch_number"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "epoch_number",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_mint",
+      "discriminator": [
+        209,
+        42,
+        195,
+        4,
+        129,
+        85,
+        209,
+        44
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Anyone can pay to create the mint — permissionless."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "The single global Velora mint PDA.",
+            "Mint authority = this PDA itself (program controls all minting).",
+            "Freeze authority = None (tokens are non-freezable).",
+            "",
+            "space for a Token-2022 Mint with no extensions:",
+            "Mint base size = 82 bytes (from spl_token_2022::state::Mint::LEN)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  101,
+                  108,
+                  111,
+                  114,
+                  97,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_scorecard",
+      "discriminator": [
+        34,
+        246,
+        135,
+        91,
+        83,
+        129,
+        141,
+        154
+      ],
+      "accounts": [
+        {
+          "name": "operator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "operator_registry",
+            "escrow_vault"
+          ]
+        },
+        {
+          "name": "operator_registry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  112,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "score_card",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  99,
+                  111,
+                  114,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "register_operator",
+      "discriminator": [
+        49,
+        242,
+        151,
+        125,
+        212,
+        136,
+        31,
+        89
+      ],
+      "accounts": [
+        {
+          "name": "operator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "operator_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  112,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "fee_bps",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "slash_operator",
+      "discriminator": [
+        93,
+        188,
+        89,
+        82,
+        93,
+        198,
+        107,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "cranker",
+          "docs": [
+            "Anyone can be the cranker — fully permissionless"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "operator_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  112,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator_registry.operator",
+                "account": "OperatorRegistry"
+              }
+            ]
+          }
+        },
+        {
+          "name": "score_card",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  99,
+                  111,
+                  114,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator_registry.operator",
+                "account": "OperatorRegistry"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator_registry.operator",
+                "account": "OperatorRegistry"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "submit_proof",
+      "discriminator": [
+        54,
+        241,
+        46,
+        84,
+        4,
+        212,
+        46,
+        94
+      ],
+      "accounts": [
+        {
+          "name": "operator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "operator_registry",
+            "score_card",
+            "escrow_vault"
+          ]
+        },
+        {
+          "name": "operator_registry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  112,
+                  101,
+                  114,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "score_card",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  99,
+                  111,
+                  114,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "operator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "instructions_sysvar",
+          "docs": [
+            "ed25519 instruction introspection. Address is verified in constraints."
+          ],
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "proof",
+          "type": {
+            "defined": {
+              "name": "FulfillmentProof"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "EpochState",
+      "discriminator": [
+        191,
+        63,
+        139,
+        237,
+        144,
+        12,
+        223,
+        210
+      ]
+    },
+    {
+      "name": "EscrowVault",
+      "discriminator": [
+        54,
+        84,
+        41,
+        149,
+        160,
+        181,
+        85,
+        114
+      ]
+    },
+    {
+      "name": "OperatorRegistry",
+      "discriminator": [
+        194,
+        188,
+        172,
+        240,
+        220,
+        209,
+        36,
+        100
+      ]
+    },
+    {
+      "name": "ScoreCard",
+      "discriminator": [
+        59,
+        113,
+        32,
+        29,
+        229,
+        230,
+        135,
+        213
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "EmissionClaimed",
+      "discriminator": [
+        75,
+        85,
+        135,
+        20,
+        99,
+        229,
+        53,
+        24
+      ]
+    },
+    {
+      "name": "EpochAdvanced",
+      "discriminator": [
+        41,
+        220,
+        14,
+        123,
+        117,
+        70,
+        117,
+        157
+      ]
+    },
+    {
+      "name": "EpochInitialised",
+      "discriminator": [
+        38,
+        131,
+        75,
+        112,
+        205,
+        251,
+        76,
+        100
+      ]
+    },
+    {
+      "name": "OperatorSlashed",
+      "discriminator": [
+        34,
+        83,
+        164,
+        27,
+        164,
+        26,
+        255,
+        152
+      ]
+    },
+    {
+      "name": "ProofSubmitted",
+      "discriminator": [
+        160,
+        51,
+        85,
+        70,
+        249,
+        89,
+        5,
+        139
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "FeeTooHigh",
+      "msg": "Fee basis points must be less than 10000"
+    },
+    {
+      "code": 6001,
+      "name": "ZeroDeposit",
+      "msg": "Deposit amount must be greater than zero"
+    },
+    {
+      "code": 6002,
+      "name": "NoBondDeposited",
+      "msg": "No bond deposited — nothing to return"
+    },
+    {
+      "code": 6003,
+      "name": "UnauthorizedOperator",
+      "msg": "Signer is not the operator of this account"
+    },
+    {
+      "code": 6004,
+      "name": "InactiveOperator",
+      "msg": "Operator is not active — register first"
+    },
+    {
+      "code": 6005,
+      "name": "InsufficientBond",
+      "msg": "Bond is below the minimum required"
+    },
+    {
+      "code": 6006,
+      "name": "SlashConditionNotMet",
+      "msg": "Operator reliability is above slash threshold"
+    },
+    {
+      "code": 6007,
+      "name": "AlreadySlashed",
+      "msg": "Operator has already been slashed and deactivated"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidMerchantSignature",
+      "msg": "Merchant co-signature verification failed"
+    },
+    {
+      "code": 6009,
+      "name": "MathOverflow",
+      "msg": "Math overflow"
+    },
+    {
+      "code": 6010,
+      "name": "EpochNotElapsed",
+      "msg": "Epoch has not elapsed yet — too early to advance"
+    },
+    {
+      "code": 6011,
+      "name": "EpochMismatch",
+      "msg": "Epoch number does not match current epoch"
+    },
+    {
+      "code": 6012,
+      "name": "AlreadyClaimedThisEpoch",
+      "msg": "Operator has already claimed emission this epoch"
+    },
+    {
+      "code": 6013,
+      "name": "InsufficientProofs",
+      "msg": "Not enough proofs submitted to claim emission"
+    },
+    {
+      "code": 6014,
+      "name": "EpochBudgetExhausted",
+      "msg": "Epoch budget exhausted for this epoch"
+    }
+  ],
+  "types": [
+    {
+      "name": "EmissionClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "operator",
+            "type": "pubkey"
+          },
+          {
+            "name": "epoch_number",
+            "type": "u64"
+          },
+          {
+            "name": "amount_minted",
+            "type": "u64"
+          },
+          {
+            "name": "ema_at_claim",
+            "type": "u64"
+          },
+          {
+            "name": "volume_at_claim",
+            "type": "u64"
+          },
+          {
+            "name": "budget_remaining",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EpochAdvanced",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_epoch",
+            "type": "u64"
+          },
+          {
+            "name": "new_epoch",
+            "type": "u64"
+          },
+          {
+            "name": "old_emitted",
+            "type": "u64"
+          },
+          {
+            "name": "new_start_slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EpochInitialised",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "epoch_number",
+            "type": "u64"
+          },
+          {
+            "name": "start_slot",
+            "type": "u64"
+          },
+          {
+            "name": "epoch_budget",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EpochState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "epoch_number",
+            "type": "u64"
+          },
+          {
+            "name": "epoch_start_slot",
+            "type": "u64"
+          },
+          {
+            "name": "epoch_budget",
+            "type": "u64"
+          },
+          {
+            "name": "epoch_emitted",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowVault",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "operator",
+            "type": "pubkey"
+          },
+          {
+            "name": "deposited_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "locked_until",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FulfillmentProof",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "latency_ms",
+            "type": "u32"
+          },
+          {
+            "name": "merchant",
+            "type": "pubkey"
+          },
+          {
+            "name": "operator",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OperatorRegistry",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "operator",
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "is_active",
+            "type": "bool"
+          },
+          {
+            "name": "registered_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OperatorSlashed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "operator",
+            "type": "pubkey"
+          },
+          {
+            "name": "cranker",
+            "type": "pubkey"
+          },
+          {
+            "name": "slash_amount",
+            "type": "u64"
+          },
+          {
+            "name": "bond_remaining",
+            "type": "u64"
+          },
+          {
+            "name": "slash_count",
+            "type": "u8"
+          },
+          {
+            "name": "ema_at_slash",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProofSubmitted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "operator",
+            "type": "pubkey"
+          },
+          {
+            "name": "merchant",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "latency_ms",
+            "type": "u32"
+          },
+          {
+            "name": "this_score",
+            "type": "u64"
+          },
+          {
+            "name": "new_ema",
+            "type": "u64"
+          },
+          {
+            "name": "fulfillment_count",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ScoreCard",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "operator",
+            "type": "pubkey"
+          },
+          {
+            "name": "ema_reliability",
+            "type": "u64"
+          },
+          {
+            "name": "total_volume",
+            "type": "u64"
+          },
+          {
+            "name": "last_claim_epoch",
+            "type": "u64"
+          },
+          {
+            "name": "fulfillment_count",
+            "type": "u64"
+          },
+          {
+            "name": "slash_count",
+            "type": "u8"
+          },
+          {
+            "name": "last_updated",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -3,7 +3,7 @@
   "license": "ISC",
   "scripts": {
     "dev": "next dev",
-    "start": "node dist/aggregator/index.js",
+    "start": "npx dist/aggregator/index.js",
     "build": "next build",
     "typecheck": "tsc --noEmit",
     "aggregator": "ts-node aggregator/index.ts",
